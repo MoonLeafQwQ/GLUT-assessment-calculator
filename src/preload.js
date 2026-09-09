@@ -11,14 +11,17 @@ contextBridge.exposeInMainWorld("ImportFile", {
 
 contextBridge.exposeInMainWorld("Setting", {
   onOpenSetting: (cb) => ipcRenderer.on("open-setting", cb),
+  onOpenFormulas: (cb) => ipcRenderer.on("open-formulas", cb),
   onGetSetting: (cb) => ipcRenderer.on("get-setting", cb),
+  onGetFormulas: (cb) => ipcRenderer.on("get-formulas", cb),
   onApplySetting: (cb) => ipcRenderer.on("apply-setting", cb),
   openSetting: (setting) => ipcRenderer.invoke("send-setting-object", setting),
+  openFormulas: (setting) => ipcRenderer.invoke("send-formulas-object", setting),
   newSetting: (setting) => ipcRenderer.invoke("new-setting-object", setting),
 });
 
 contextBridge.exposeInMainWorld("Global", {
   onResizeWindow: (cb) => ipcRenderer.on("window-resize", cb),
   onStarPicReq: (cb) => ipcRenderer.on("star-pic-request", cb),
-  openShell : () => ipcRenderer.invoke("open-shell")
+  openShell: (url) => ipcRenderer.invoke("open-shell", url),
 });

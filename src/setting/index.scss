@@ -1,12 +1,68 @@
-body{
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    overflow: hidden;
-    .warp{
-        width: 80vw;
-        height: 80vh;
-        max-width: 600px;
-        max-height: 800px;
-    }
+body {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden;
+  .warp {
+    width: 80vw;
+    height: 80vh;
+    max-width: 600px;
+    max-height: 800px;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  body {
+    background: #1a1a1e;
+  }
+  .ant-card,
+  .ant-card-bordered,
+  .ant-list,
+  .ant-list-bordered,
+  .ant-list-item,
+  .ant-form-item-label > label,
+  .ant-slider-mark-text,
+  .ant-slider-tooltip-inner,
+  h1,
+  h2 {
+    color: #e6e6e6;
+  }
+  .ant-card {
+    background: #26262c;
+    border-color: #4a4a52;
+  }
+  .ant-card-bordered {
+    border-color: #4a4a52;
+  }
+  .ant-input,
+  .ant-input-number,
+  .ant-btn {
+    color: #e6e6e6;
+    background: #2e2e35;
+    border-color: #4a4a52;
+  }
+  .ant-input-group-addon,
+  .ant-input-number-group-addon {
+    color: #e6e6e6;
+    background: #2e2e35;
+    border-color: #4a4a52;
+  }
+  .ant-input::placeholder {
+    color: #8a8a92;
+  }
+  .ant-btn-primary {
+    color: #fff;
+    background: #1890ff;
+    border-color: #1890ff;
+  }
+  .ant-slider-rail {
+    background: #4a4a52;
+  }
+  .ant-slider-track {
+    background: #1890ff;
+  }
+  .ant-slider-handle {
+    border-color: #1890ff;
+    background: #2e2e35;
+  }
 }
