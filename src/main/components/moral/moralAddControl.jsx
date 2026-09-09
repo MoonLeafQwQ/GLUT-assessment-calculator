@@ -1,15 +1,24 @@
 import React from "react";
 import { bindActionCreators } from "redux";
 import { connect } from "react-redux";
-import { actions } from "../../reducers/moral.js";
-const { change_item } = actions;
-import { Input, Form, Space, Divider, PageHeader } from "antd";
+import { Input, Space, Divider, PageHeader, Button } from "antd";
+import { PlusOutlined, DeleteOutlined, ArrowLeftOutlined } from "@ant-design/icons";
+import { actions as moralActions } from "../../reducers/moral.js";
 import {
   actions as rootActions,
   allEditingValue,
 } from "../../reducers/rootReducer";
-import { ArrowLeftOutlined } from "@ant-design/icons";
-const { change_editing } = rootActions;
+import { scoreMoral } from "../../../domain/scoring";
+
+function toNumOrNull(v) {
+  if (v === "" || v === null || v === undefined) return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+function str(v) {
+  return v === null || v === undefined ? "" : String(v);
+}
 
 class MoralADDControl extends React.Component {
   constructor(props) {
@@ -17,79 +26,96 @@ class MoralADDControl extends React.Component {
   }
 
   render() {
+    const adds = Array.isArray(this.props.adds) ? this.props.adds : [];
+    const part = scoreMoral(this.props.moral || {}, this.props.rules || {});
     return (
       <div className="controlInner">
         <PageHeader
           title="德育加分项"
+          subTitle={
+            <span>
+              加分合计：{part.addsTotal == null ? 0 : part.addsTotal}　总分：
+              {part.total == null ? "-" : part.total}
+            </span>
+          }
           onBack={() => this.props.change_editing(allEditingValue.NONE)}
-          subTitle={<span>德育总分：{this.props.total}</span>}
           backIcon={
             <>
               <ArrowLeftOutlined></ArrowLeftOutlined>返回
             </>
           }
         ></PageHeader>
-        <Form layout="inline">
-          <Divider></Divider>
-          {this.props.addItem.map((item, index) => {
-            const [labelName, description, point] = item;
-            return (
-              <div key={labelName}>
-                <Space key={labelName}>
-                  <Form.Item>
-                    <div className="control-label">
-                      <label>{labelName}</label>
-                    </div>
-                  </Form.Item>
-                  <Form.Item>
-                    <Input
-                      addonBefore="加分原因"
-                      value={description}
-                      onChange={(e) => {
-                        this.props.change_item(
-                          true,
-                          index,
-                          1,
-                          e.nativeEvent.target.value
-                        );
-                      }}
-                    ></Input>
-                    <Input
-                      addonBefore="加分"
-                      type={"number"}
-                      value={point}
-                      onChange={(e) => {
-                        this.props.change_item(
-                          true,
-                          index,
-                          2,
-                          e.nativeEvent.target.value
-                        );
-                      }}
-                    ></Input>
-                  </Form.Item>
-                </Space>
-                <Divider></Divider>
-              </div>
-            );
-          })}
-        </Form>
+        <FormInline>
+          {adds.map((row, index) => (
+            <div key={index}>
+              <Space style={{ display: "flex", flexWrap: "wrap" }}>
+                <Input
+                  addonBefore="加分项目"
+                  value={str(row.name)}
+                  onChange={(e) =>
+                    this.props.change_add(index, "name", e.target.value)
+                  }
+                />
+                <Input
+                  addonBefore="加分"
+                  type="number"
+                  value={str(row.points)}
+                  onChange={(e) =>
+                    this.props.change_add(
+                      index,
+                      "points",
+                      toNumOrNull(e.target.value)
+                    )
+                  }
+                />
+                <Button
+                  type="text"
+                  danger
+                  icon={<DeleteOutlined />}
+                  onClick={() => this.props.remove_row("adds", index)}
+                >
+                  删除
+                </Button>
+              </Space>
+              <Divider />
+            </div>
+          ))}
+          <Button
+            type="dashed"
+            icon={<PlusOutlined />}
+            block
+            onClick={() => this.props.add_row("adds")}
+          >
+            添加加分项
+          </Button>
+        </FormInline>
       </div>
     );
   }
 }
 
+function FormInline(props) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+      {props.children}
+    </div>
+  );
+}
+
 function mapStateToProps(state) {
   return {
-    addItem: state.moral.addItem,
-    total: state.moral.total,
+    adds: state.moral.adds,
+    moral: state.moral,
+    rules: state.setting.rules,
   };
 }
 
 function mapDispatchToProps(dispatch) {
   return {
-    change_item: bindActionCreators(change_item, dispatch),
-    change_editing: bindActionCreators(change_editing, dispatch),
+    change_add: bindActionCreators(moralActions.change_add, dispatch),
+    add_row: bindActionCreators(moralActions.add_row, dispatch),
+    remove_row: bindActionCreators(moralActions.remove_row, dispatch),
+    change_editing: bindActionCreators(rootActions.change_editing, dispatch),
   };
 }
 

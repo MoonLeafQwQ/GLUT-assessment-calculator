@@ -2,19 +2,31 @@ import React from "react";
 import { connect } from "react-redux";
 import { Button } from "antd";
 import * as echarts from "echarts";
-import { allEditingValue } from "../../reducers/rootReducer";
+import { scoreMoral, scoreStudy, scoreAbility, scoreSport, scoreArt, scoreWork, scoreTotal } from "../../../domain/scoring";
 
-function fixed2(num) {
-  return Math.floor(num * 100) / 100;
+const dimensions = [
+  ["德育", "moral", scoreMoral],
+  ["专业学习", "study", scoreStudy],
+  ["科研创新", "ability", scoreAbility],
+  ["体育", "sport", scoreSport],
+  ["美育", "art", scoreArt],
+  ["劳动", "work", scoreWork],
+];
+
+function format(value) {
+  return value == null ? "-" : Number(value).toFixed(2);
 }
 
-const piePosition = [
-  { msg: "9%", center: ["10%", "50%"], radius: ["50%", "75%"] },
-  { msg: "29%", center: ["30%", "50%"], radius: ["50%", "60%"] },
-  { msg: "49%", center: ["50%", "50%"], radius: ["50%", "60%"] },
-  { msg: "69%", center: ["70%", "50%"], radius: ["50%", "60%"] },
-  { msg: "89%", center: ["90%", "50%"], radius: ["50%", "60%"] },
-];
+function numberOrZero(value) {
+  return Number.isFinite(value) ? value : 0;
+}
+
+function position(index, count) {
+  return `${(index + 0.5) * (100 / count)}%`;
+}
+
+const ALL_RINGS_MIN_WIDTH = 600;
+const SUMMARY_RING_MIN_WIDTH = 160;
 
 class TopShow extends React.Component {
   constructor(props) {
@@ -22,563 +34,146 @@ class TopShow extends React.Component {
     this.showPie = null;
   }
 
-  componentDidMount() {
-    let { ability, moral, sport, study, setting } = this.props;
-    sport = sport ? sport : 0;
-    const result = fixed2(
-      moral * (setting.moral / 100) +
-        study * (setting.study / 100) +
-        sport * (setting.sport / 100) +
-        ability * (setting.ability / 100)
-    );
-    moral = fixed2(moral);
-    study = fixed2(study);
-    sport = fixed2(sport);
-    ability = fixed2(ability);
-
-    this.showPie = echarts.init(document.querySelector("#pie"));
-    window.Global.onResizeWindow((e) => {
-      this.showPie.resize();
-    });
-    this.showPie.setOption({
-      tooltip: {},
-      title: [
-        {
-          text: result + "\n总分",
-          top: "center",
-          textAlign: "center",
-          textStyle: {
-            fontSize: 14,
-          },
-          left: piePosition[0].msg,
-        },
-        {
-          text: `${moral}\nx${setting.moral}%`,
-          top: "center",
-          textAlign: "center",
-          textStyle: {
-            fontSize: 14,
-          },
-          left: piePosition[1].msg,
-        },
-        {
-          text: `${study}\nx${setting.study}%`,
-          top: "center",
-          textAlign: "center",
-          textStyle: {
-            fontSize: 14,
-          },
-          left: piePosition[2].msg,
-        },
-        {
-          text: `${sport}\nx${setting.sport}%`,
-          top: "center",
-          textAlign: "center",
-          textStyle: {
-            fontSize: 14,
-          },
-          left: piePosition[3].msg,
-        },
-        {
-          text: `${ability}\nx${setting.ability}%`,
-          top: "center",
-          textAlign: "center",
-          textStyle: {
-            fontSize: 14,
-          },
-          left: piePosition[4].msg,
-        },
-      ],
-      series: [
-        {
-          type: "pie",
-          radius: piePosition[0].radius,
-          center: piePosition[0].center,
-          data: [
-            {
-              name: "德育",
-              label: {
-                position: "inside",
-              },
-              value: moral * (setting.moral / 100),
-            },
-            {
-              name: "智育",
-              label: {
-                position: "inside",
-              },
-              value: study * (setting.study / 100),
-            },
-            {
-              name: "体育",
-              label: {
-                position: "inside",
-              },
-              value: sport * (setting.sport / 100),
-            },
-            {
-              name: "能力",
-              label: {
-                position: "inside",
-              },
-              value: ability * (setting.ability / 100),
-            },
-            {
-              name: "未获得",
-              value: 100 - result,
-              label: {
-                show: false,
-              },
-              itemStyle: {
-                opacity: 0,
-              },
-            },
-          ],
-        },
-        {
-          type: "pie",
-          radius: piePosition[1].radius,
-          center: piePosition[1].center,
-          label: {
-            position: "inside",
-          },
-          data: [
-            {
-              name: "德育",
-              value: moral,
-            },
-            {
-              name: "未获得",
-              value: 100 - moral,
-              label: {
-                show: false,
-              },
-              itemStyle: {
-                opacity: 0,
-              },
-            },
-          ],
-          stillShowZeroSum: false,
-        },
-        {
-          type: "pie",
-          radius: piePosition[2].radius,
-          center: piePosition[2].center,
-          label: {
-            position: "inside",
-          },
-          data: [
-            {
-              name: "智育",
-              value: study,
-            },
-            {
-              name: "未获得",
-              value: 100 - study,
-              label: {
-                show: false,
-              },
-              itemStyle: {
-                opacity: 0,
-              },
-            },
-          ],
-          stillShowZeroSum: false,
-        },
-        {
-          type: "pie",
-          radius: piePosition[3].radius,
-          center: piePosition[3].center,
-          label: {
-            position: "inside",
-          },
-          data: [
-            {
-              name: "体育",
-              value: sport,
-            },
-            {
-              name: "未获得",
-              value: 100 - sport,
-              label: {
-                show: false,
-              },
-              itemStyle: {
-                opacity: 0,
-              },
-            },
-          ],
-          stillShowZeroSum: false,
-        },
-        {
-          type: "pie",
-          radius: piePosition[4].radius,
-          center: piePosition[4].center,
-          label: {
-            position: "inside",
-          },
-          data: [
-            {
-              name: "能力",
-              value: ability,
-            },
-            {
-              name: "未获得",
-              value: 100 - ability,
-              label: {
-                show: false,
-              },
-              itemStyle: {
-                opacity: 0,
-              },
-            },
-          ],
-          stillShowZeroSum: false,
-        },
-      ],
-    });
+componentDidMount() {
+    const element = document.querySelector("#pie");
+    if (!element) return;
+    this.showPie = echarts.init(element);
+    this.resizeDebounced = this.debounce(() => {
+      if (this.showPie) {
+        this.updateChart();
+        this.showPie.resize();
+      }
+    }, 200);
+    window.addEventListener("resize", this.resizeDebounced);
+    this.handleThemeChange = () => {
+      if (this.showPie) {
+        this.updateChart();
+        this.showPie.resize();
+      }
+    };
+    if (window.matchMedia) {
+      this.darkQuery = window.matchMedia("(prefers-color-scheme: dark)");
+      this.darkQuery.addEventListener("change", this.handleThemeChange);
+    }
+    this.updateChart();
+    const warp = element.closest(".warp");
+    if (warp) {
+      this.handleTransitionEnd = () => {
+        if (this.showPie) {
+          this.updateChart();
+          this.showPie.resize();
+        }
+      };
+      warp.addEventListener("transitionend", this.handleTransitionEnd);
+    }
   }
 
   componentDidUpdate() {
-    let { ability, moral, sport, study, setting } = this.props;
-    sport = sport ? sport : 0;
-    const result = fixed2(
-      moral * (setting.moral / 100) +
-        study * (setting.study / 100) +
-        sport * (setting.sport / 100) +
-        ability * (setting.ability / 100)
-    );
-    moral = fixed2(moral);
-    study = fixed2(study);
-    sport = fixed2(sport);
-    ability = fixed2(ability);
-    if (this.props.editing === allEditingValue.NONE) {
-      this.showPie.setOption({
-        title: [
-          {
-            text: result + "\n总分",
-            top: "center",
-            textAlign: "center",
-            textStyle: {
-              fontSize: 14,
-            },
-            left: piePosition[0].msg,
-          },
-          {
-            text: `${moral}\nx${setting.moral}%`,
-            top: "center",
-            textAlign: "center",
-            textStyle: {
-              fontSize: 14,
-            },
-            left: piePosition[1].msg,
-          },
-          {
-            text: `${study}\nx${setting.study}%`,
-            top: "center",
-            textAlign: "center",
-            textStyle: {
-              fontSize: 14,
-            },
-            left: piePosition[2].msg,
-          },
-          {
-            text: `${sport}\nx${setting.sport}%`,
-            top: "center",
-            textAlign: "center",
-            textStyle: {
-              fontSize: 14,
-            },
-            left: piePosition[3].msg,
-          },
-          {
-            text: `${ability}\nx${setting.ability}%`,
-            top: "center",
-            textAlign: "center",
-            textStyle: {
-              fontSize: 14,
-            },
-            left: piePosition[4].msg,
-          },
-        ],
-        series: [
-          {
-            type: "pie",
-            radius: piePosition[0].radius,
-            center: piePosition[0].center,
-            data: [
-              {
-                name: "德育",
-                label: {
-                  position: "inside",
-                },
-                value: moral * (setting.moral / 100),
-              },
-              {
-                name: "智育",
-                label: {
-                  position: "inside",
-                },
-                value: study * (setting.study / 100),
-              },
-              {
-                name: "体育",
-                label: {
-                  position: "inside",
-                },
-                value: sport * (setting.sport / 100),
-              },
-              {
-                name: "能力",
-                label: {
-                  position: "inside",
-                },
-                value: ability * (setting.ability / 100),
-              },
-              {
-                name: "未获得",
-                value: 100 - result,
-                label: {
-                  show: false,
-                },
-                itemStyle: {
-                  opacity: 0,
-                },
-              },
-            ],
-          },
-          {
-            type: "pie",
-            radius: piePosition[1].radius,
-            center: piePosition[1].center,
-            label: {
-              position: "inside",
-            },
-            data: [
-              {
-                name: "德育",
-                value: moral,
-              },
-              {
-                name: "未获得",
-                value: 100 - moral,
-                label: {
-                  show: false,
-                },
-                itemStyle: {
-                  opacity: 0,
-                },
-              },
-            ],
-          },
-          {
-            type: "pie",
-            radius: piePosition[2].radius,
-            center: piePosition[2].center,
-            label: {
-              position: "inside",
-            },
-            data: [
-              {
-                name: "智育",
-                value: study,
-              },
-              {
-                name: "未获得",
-                value: 100 - study,
-                label: {
-                  show: false,
-                },
-                itemStyle: {
-                  opacity: 0,
-                },
-              },
-            ],
-          },
-          {
-            type: "pie",
-            radius: piePosition[3].radius,
-            center: piePosition[3].center,
-            label: {
-              position: "inside",
-            },
-            data: [
-              {
-                name: "体育",
-                value: sport,
-              },
-              {
-                name: "未获得",
-                value: 100 - sport,
-                label: {
-                  show: false,
-                },
-                itemStyle: {
-                  opacity: 0,
-                },
-              },
-            ],
-          },
-          {
-            type: "pie",
-            radius: piePosition[4].radius,
-            center: piePosition[4].center,
-            label: {
-              position: "inside",
-            },
-            data: [
-              {
-                name: "能力",
-                value: ability,
-              },
-              {
-                name: "未获得",
-                value: 100 - ability,
-                label: {
-                  show: false,
-                },
-                itemStyle: {
-                  opacity: 0,
-                },
-              },
-            ],
-          },
-        ],
-      });
-    } else {
-      this.showPie.setOption({
-        title: [
-          {
-            text: result + "\n总分",
-            top: "center",
-            textAlign: "center",
-            textStyle: {
-              fontSize: 14,
-            },
-            left: piePosition[0].msg,
-          },
-          {
-            text: ``,
-            top: "center",
-            textAlign: "center",
-            textStyle: {
-              fontSize: 14,
-            },
-            left: piePosition[1].msg,
-          },
-          {
-            text: ``,
-            top: "center",
-            textAlign: "center",
-            textStyle: {
-              fontSize: 14,
-            },
-            left: piePosition[2].msg,
-          },
-          {
-            text: ``,
-            top: "center",
-            textAlign: "center",
-            textStyle: {
-              fontSize: 14,
-            },
-            left: piePosition[3].msg,
-          },
-          {
-            text: ``,
-            top: "center",
-            textAlign: "center",
-            textStyle: {
-              fontSize: 14,
-            },
-            left: piePosition[4].msg,
-          },
-        ],
-        series: [
-          {
-            type: "pie",
-            radius: piePosition[0].radius,
-            center: piePosition[0].center,
-            data: [
-              {
-                name: "德育",
-                label: {
-                  position: "inside",
-                },
-                value: moral * (setting.moral / 100),
-              },
-              {
-                name: "智育",
-                label: {
-                  position: "inside",
-                },
-                value: study * (setting.study / 100),
-              },
-              {
-                name: "体育",
-                label: {
-                  position: "inside",
-                },
-                value: sport * (setting.sport / 100),
-              },
-              {
-                name: "能力",
-                label: {
-                  position: "inside",
-                },
-                value: ability * (setting.ability / 100),
-              },
-              {
-                name: "未获得",
-                value: 100 - result,
-                label: {
-                  show: false,
-                },
-                itemStyle: {
-                  opacity: 0,
-                },
-              },
-            ],
-          },
-          {
-            type: "pie",
-            radius: piePosition[1].radius,
-            center: piePosition[1].center,
-            label: {
-              position: "inside",
-            },
-            data: [0],
-          },
-          {
-            type: "pie",
-            radius: piePosition[2].radius,
-            center: piePosition[2].center,
-            label: {
-              position: "inside",
-            },
-            data: [0],
-          },
-          {
-            type: "pie",
-            radius: piePosition[3].radius,
-            center: piePosition[3].center,
-            label: {
-              position: "inside",
-            },
-            data: [0],
-          },
-          {
-            type: "pie",
-            radius: piePosition[4].radius,
-            center: piePosition[4].center,
-            label: {
-              position: "inside",
-            },
-            data: [0],
-          },
-        ],
-      });
+    this.updateChart();
+  }
+
+  componentWillUnmount() {
+    window.removeEventListener("resize", this.resizeDebounced);
+    if (this.darkQuery && this.handleThemeChange) {
+      this.darkQuery.removeEventListener("change", this.handleThemeChange);
     }
+    if (this.handleTransitionEnd) {
+      const element = document.querySelector("#pie");
+      if (element) {
+        const warp = element.closest(".warp");
+        if (warp) warp.removeEventListener("transitionend", this.handleTransitionEnd);
+      }
+    }
+    if (this.showPie) {
+      this.showPie.dispose();
+      this.showPie = null;
+    }
+  }
+
+  debounce(fn, delay) {
+    let timer = null;
+    return function (...args) {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        fn.apply(this, args);
+        timer = null;
+      }, delay);
+    };
+  }
+
+  getParts() {
+    const { state, rules } = this.props;
+    return dimensions.reduce((result, [label, key, scorer]) => {
+      result[key] = scorer(state[key], rules);
+      result[key].label = label;
+      return result;
+    }, {});
+  }
+
+  getRingMode() {
+    const container = document.querySelector("#pie");
+    const width = container ? container.clientWidth : 0;
+    if (width >= ALL_RINGS_MIN_WIDTH) return "all";
+    if (width >= SUMMARY_RING_MIN_WIDTH) return "summary";
+    return "none";
+  }
+
+  updateChart() {
+    if (!this.showPie) return;
+    const parts = this.getParts();
+    const summary = scoreTotal(parts, this.props.rules);
+    const mode = this.getRingMode();
+    const isDark = !!(window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+    const chartTextColor = isDark ? "#e6e6e6" : "#000000";
+    const labels =
+      mode === "all"
+        ? [["总分", "summary"]].concat(dimensions.map(([label, key]) => [label, key]))
+        : mode === "summary"
+          ? [["总分", "summary"]]
+          : [];
+    const count = mode === "all" ? 7 : 1;
+    const titles = labels.map(([label, key]) => {
+      if (key === "summary") return `${format(summary.total)}\n总分`;
+      const part = parts[key];
+      return `${format(part.total)}\n×${Math.round(part.weight * 100)}%`;
+    });
+    const series = labels.map(([label, key], index) => {
+      if (key === "summary") {
+        return {
+          type: "pie",
+          radius: ["45%", "72%"],
+          center: [position(index, count), "50%"],
+          label: { show: false },
+          data: dimensions.map(([name, dimensionKey]) => ({
+            name,
+            value: numberOrZero(parts[dimensionKey].contribution),
+          })),
+        };
+      }
+      const value = numberOrZero(parts[key].total);
+      return {
+        type: "pie",
+        radius: ["45%", "62%"],
+        center: [position(index, count), "50%"],
+        label: { show: false },
+        stillShowZeroSum: false,
+        data: [
+          { name: label, value },
+          { name: "未获得", value: Math.max(0, 100 - value), itemStyle: { opacity: 0 } },
+        ],
+      };
+    });
+    this.showPie.setOption({
+      tooltip: { trigger: "item" },
+      title: titles.map((text, index) => ({
+        text,
+        top: "center",
+        left: position(index, count),
+        textAlign: "center",
+        textStyle: { fontSize: 11, color: chartTextColor },
+      })),
+      series,
+    }, true);
   }
 
   render() {
@@ -603,11 +198,8 @@ class TopShow extends React.Component {
 
 function mapStateToProps(state) {
   return {
-    ability: state.ability.sum > 80 ? 100 : state.ability.sum + 20,
-    moral: state.moral.total,
-    sport: state.sport.total,
-    study: state.study.sum,
-    setting: state.setting,
+    state,
+    rules: state.setting.rules,
     editing: state.global.editing,
     dataObj: {
       message: state.message,
@@ -615,6 +207,8 @@ function mapStateToProps(state) {
       sport: state.sport,
       study: state.study,
       ability: state.ability,
+      art: state.art,
+      work: state.work,
       setting: state.setting,
     },
   };

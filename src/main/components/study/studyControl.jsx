@@ -1,21 +1,24 @@
 import React from "react";
 import { bindActionCreators } from "redux";
 import { connect } from "react-redux";
-import { actions } from "../../reducers/study.js";
-const { add_item, change_item, delete_item } = actions;
-
-import { CSSTransition, TransitionGroup } from "react-transition-group";
-import { Form, Input, Button, Space, PageHeader } from "antd";
-import {
-  ArrowLeftOutlined,
-  MinusCircleOutlined,
-  PlusOutlined,
-} from "@ant-design/icons";
+import { Input, Space, Divider, PageHeader, Button } from "antd";
+import { PlusOutlined, DeleteOutlined, ArrowLeftOutlined } from "@ant-design/icons";
+import { actions as studyActions } from "../../reducers/study.js";
 import {
   actions as rootActions,
   allEditingValue,
 } from "../../reducers/rootReducer";
-const { change_editing } = rootActions;
+import { scoreStudy } from "../../../domain/scoring";
+
+function toNumOrNull(v) {
+  if (v === "" || v === null || v === undefined) return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+function str(v) {
+  return v === null || v === undefined ? "" : String(v);
+}
 
 class StudyControl extends React.Component {
   constructor(props) {
@@ -23,109 +26,80 @@ class StudyControl extends React.Component {
   }
 
   render() {
+    const items = Array.isArray(this.props.items) ? this.props.items : [];
+    const part = scoreStudy(this.props.study || {}, this.props.rules || {});
     return (
       <div className="controlInner">
-        <Form>
-          <PageHeader
-            title="智育总分计算器"
-            onBack={() => this.props.change_editing(allEditingValue.NONE)}
-            backIcon={
-              <>
-                <ArrowLeftOutlined></ArrowLeftOutlined>返回
-              </>
-            }
-            subTitle={
-              <span>
-                智育总分：
-                {this.props.sum && this.props.sum.toFixed(3).toString()}
-              </span>
-            }
-          ></PageHeader>
-          <p style={{ color: "gray" }}>
-            &nbsp; &nbsp;
-            注：每门课只需要填成绩和学分就可以计算，但是你仍然可以填课程名，方便你区分每门课
-          </p>
-          <TransitionGroup>
-            {this.props.item.map((v, i) => {
-              const [itemName, mark, point, id] = v;
-              return (
-                <CSSTransition
-                  key={id}
-                  classNames="component-fade"
-                  addEndListener={(node, done) =>
-                    node.addEventListener("transitionend", done, false)
+        <PageHeader
+          title="专业学习分（智育）"
+          subTitle={
+            <span>
+              加权平均：{part.total == null ? "-" : part.total}
+            </span>
+          }
+          onBack={() => this.props.change_editing(allEditingValue.NONE)}
+          backIcon={
+            <>
+              <ArrowLeftOutlined></ArrowLeftOutlined>返回
+            </>
+          }
+        ></PageHeader>
+        <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+          {items.map((row, index) => (
+            <div key={index}>
+              <Space style={{ display: "flex", flexWrap: "wrap" }}>
+                <Input
+                  addonBefore="课程"
+                  value={str(row.name)}
+                  onChange={(e) =>
+                    this.props.change_item(index, "name", e.target.value)
                   }
+                />
+                <Input
+                  addonBefore="学分"
+                  type="number"
+                  value={str(row.credit)}
+                  onChange={(e) =>
+                    this.props.change_item(
+                      index,
+                      "credit",
+                      toNumOrNull(e.target.value)
+                    )
+                  }
+                />
+                <Input
+                  addonBefore="成绩"
+                  type="number"
+                  value={str(row.score)}
+                  onChange={(e) =>
+                    this.props.change_item(
+                      index,
+                      "score",
+                      toNumOrNull(e.target.value)
+                    )
+                  }
+                />
+                <Button
+                  type="text"
+                  danger
+                  icon={<DeleteOutlined />}
+                  onClick={() => this.props.delete_item(index)}
                 >
-                  <div>
-                    <Space
-                      style={{
-                        display: "flex",
-                        marginBottom: 8,
-                      }}
-                    >
-                      <Form.Item>
-                        <Input
-                          addonBefore="课程名"
-                          value={itemName}
-                          onChange={(e) =>
-                            this.props.change_item(
-                              id,
-                              0,
-                              e.nativeEvent.target.value
-                            )
-                          }
-                        ></Input>
-                      </Form.Item>
-                      <Form.Item>
-                        <Input
-                          addonBefore="成绩"
-                          type={"number"}
-                          value={mark}
-                          onChange={(e) =>
-                            this.props.change_item(
-                              id,
-                              1,
-                              e.nativeEvent.target.value
-                            )
-                          }
-                        ></Input>
-                      </Form.Item>
-                      <Form.Item>
-                        <Input
-                          addonBefore="学分"
-                          type={"number"}
-                          value={point}
-                          onChange={(e) =>
-                            this.props.change_item(
-                              id,
-                              2,
-                              e.nativeEvent.target.value
-                            )
-                          }
-                        ></Input>
-                      </Form.Item>
-                      <Form.Item>
-                        <MinusCircleOutlined
-                          onClick={() => this.props.delete_item(id)}
-                        ></MinusCircleOutlined>
-                      </Form.Item>
-                    </Space>
-                  </div>
-                </CSSTransition>
-              );
-            })}
-          </TransitionGroup>
-          <Form.Item>
-            <Button
-              type="dashed"
-              onClick={() => this.props.add_item()}
-              block
-              icon={<PlusOutlined />}
-            >
-              添加一门课程
-            </Button>
-          </Form.Item>
-        </Form>
+                  删除
+                </Button>
+              </Space>
+              <Divider />
+            </div>
+          ))}
+          <Button
+            type="dashed"
+            icon={<PlusOutlined />}
+            block
+            onClick={() => this.props.add_item()}
+          >
+            添加课程
+          </Button>
+        </div>
       </div>
     );
   }
@@ -133,17 +107,18 @@ class StudyControl extends React.Component {
 
 function mapStateToProps(state) {
   return {
-    item: state.study.item,
-    sum: state.study.sum,
+    items: state.study.items,
+    study: state.study,
+    rules: state.setting.rules,
   };
 }
 
 function mapDispatchToProps(dispatch) {
   return {
-    add_item: bindActionCreators(add_item, dispatch),
-    change_item: bindActionCreators(change_item, dispatch),
-    delete_item: bindActionCreators(delete_item, dispatch),
-    change_editing: bindActionCreators(change_editing, dispatch),
+    change_item: bindActionCreators(studyActions.change_item, dispatch),
+    add_item: bindActionCreators(studyActions.add_item, dispatch),
+    delete_item: bindActionCreators(studyActions.delete_item, dispatch),
+    change_editing: bindActionCreators(rootActions.change_editing, dispatch),
   };
 }
 

@@ -5,247 +5,95 @@ import { bindActionCreators } from "redux";
 import { actions, allEditingValue } from "../../reducers/rootReducer.js";
 const { change_editing } = actions;
 
+// Column groups: each visual row holds 3 entries across 9 cells.
+const HEAD_LABELS = ["加分项目", "加分"];
+
+function tdStyle(rowIndex, groupIndex, colIndex) {
+  const borderTop = rowIndex === 0 ? { borderTop: " none" } : {};
+  if (groupIndex === 0 && colIndex === 0) {
+    return { height: " 14.25pt", ...borderTop };
+  }
+  return colIndex === 0
+    ? { ...borderTop, borderLeft: " none" }
+    : { ...borderTop, borderLeft: " none" };
+}
+
+function tdClass(groupIndex, colIndex) {
+  if (colIndex === 0) {
+    return groupIndex === 0 ? "xl67" : groupIndex === 1 ? "xl69" : "xl73";
+  }
+  return colIndex === 1 ? "xl78" : "xl67";
+}
+
+function entryValue(entry, colIndex) {
+  if (!entry) return "";
+  if (colIndex === 0) return entry.name || "";
+  return entry.points == null ? "" : entry.points;
+}
+
 class MoralADD extends React.Component {
   constructor(props) {
     super(props);
   }
 
   render() {
-    const arr = this.props.addItem;
+    const adds = (Array.isArray(this.props.adds) ? this.props.adds : []).filter(
+      (row) => row && (String(row.name || "").trim() || String(row.desc || "").trim() || Number.isFinite(row.points))
+    );
+    const bodyRows = [];
+    const rowCount = Math.ceil(adds.length / 3);
+    for (let r = 0; r < rowCount; r += 1) {
+      const cells = [];
+      for (let g = 0; g < 3; g += 1) {
+        const idx = r * 3 + g;
+        const entry = idx < adds.length ? adds[idx] : null;
+        for (let c = 0; c < 2; c += 1) {
+          cells.push(
+            <td
+              key={`${r}-${g}-${c}`}
+              className={tdClass(g, c)}
+              align={c === 1 ? "right" : undefined}
+              style={tdStyle(r, g, c)}
+            >
+              {entry ? entryValue(entry, c) : ""}
+            </td>
+          );
+        }
+      }
+      bodyRows.push(<tr key={r}>{cells}</tr>);
+    }
     return (
       <tbody
         className={
-          "component " +
+          "component clickable-section " +
           (this.props.editing === allEditingValue.MORAL_ADD && "active")
         }
         onClick={() => {
-          this.props.change_editing(this.props.editing === allEditingValue.MORAL_ADD
+          this.props.change_editing(
+            this.props.editing === allEditingValue.MORAL_ADD
               ? allEditingValue.NONE
-              : allEditingValue.MORAL_ADD);
+              : allEditingValue.MORAL_ADD
+          );
         }}
       >
         <tr height="19" style={{ height: " 14.25pt" }}>
-          <td
-            height="19"
-            className="xl66"
-            style={{ height: " 14.25pt", borderTop: " none" }}
-          >
-            加分项目
-          </td>
-          <td
-            className="xl66"
-            style={{ borderTop: " none", borderLeft: " none" }}
-          >
-            加分原因
-          </td>
-          <td
-            className="xl66"
-            style={{ borderTop: " none", borderLeft: " none" }}
-          >
-            加分
-          </td>
-          <td
-            className="xl66"
-            style={{ borderTop: " none", borderLeft: " none" }}
-          >
-            加分项目
-          </td>
-          <td
-            className="xl66"
-            style={{ borderTop: " none", borderLeft: " none" }}
-          >
-            加分原因
-          </td>
-          <td
-            className="xl66"
-            style={{ borderTop: " none", borderLeft: " none" }}
-          >
-            加分
-          </td>
-          <td
-            className="xl66"
-            style={{ borderTop: " none", borderLeft: " none" }}
-          >
-            加分项目
-          </td>
-          <td
-            className="xl66"
-            style={{ borderTop: " none", borderLeft: " none" }}
-          >
-            加分原因
-          </td>
-          <td
-            className="xl66"
-            style={{ borderTop: " none", borderLeft: " none" }}
-          >
-            加分
-          </td>
+          {[0, 1, 2].map((g) =>
+            HEAD_LABELS.map((label, c) => (
+              <td
+                key={`${g}-${c}`}
+                className="xl66"
+                style={
+                  g === 0 && c === 0
+                    ? { borderTop: " none" }
+                    : { borderTop: " none", borderLeft: " none" }
+                }
+              >
+                {label}
+              </td>
+            ))
+          )}
         </tr>
-        <tr height="19" style={{ height: " 14.25pt" }}>
-          <td
-            height="19"
-            className="xl67"
-            style={{ height: " 14.25pt", borderTop: " none" }}
-          >
-            {arr[0][0]}
-          </td>
-          <td
-            className="xl78"
-            style={{ borderTop: " none", borderLeft: " none" }}
-          >
-            {arr[0][1]}
-          </td>
-          <td
-            className="xl67"
-            align="right"
-            style={{ borderTop: " none", borderLeft: " none" }}
-          >
-            {arr[0][2]}
-          </td>
-          <td
-            className="xl69"
-            style={{ borderTop: " none", borderLeft: " none" }}
-          >
-            {arr[3][0]}
-          </td>
-          <td
-            className="xl78"
-            style={{ borderTop: " none", borderLeft: " none" }}
-          >
-            {arr[3][1]}
-          </td>
-          <td
-            className="xl67"
-            style={{ borderTop: " none", borderLeft: " none" }}
-          >
-            {arr[3][2]}
-          </td>
-          <td
-            className="xl67"
-            style={{ borderTop: " none", borderLeft: " none" }}
-          >
-            {arr[6][0]}
-          </td>
-          <td
-            className="xl78"
-            style={{ borderTop: " none", borderLeft: " none" }}
-          >
-            {arr[6][1]}
-          </td>
-          <td
-            className="xl67"
-            align="right"
-            style={{ borderTop: " none", borderLeft: " none" }}
-          >
-            {arr[6][2]}
-          </td>
-        </tr>
-        <tr height="19" style={{ height: " 14.25pt" }}>
-          <td
-            height="19"
-            className="xl67"
-            style={{ height: " 14.25pt", borderTop: " none" }}
-          >
-            {arr[1][0]}
-          </td>
-          <td className="xl78">{arr[1][1]}</td>
-          <td className="xl67" style={{ borderTop: " none" }}>
-            {arr[1][2]}
-          </td>
-          <td
-            className="xl67"
-            style={{ borderTop: " none", borderLeft: " none" }}
-          >
-            {arr[4][0]}
-          </td>
-          <td
-            className="xl78"
-            style={{ borderTop: " none", borderLeft: " none" }}
-          >
-            {arr[4][1]}
-          </td>
-          <td
-            className="xl67"
-            align="right"
-            style={{ borderTop: " none", borderLeft: " none" }}
-          >
-            {arr[4][2]}
-          </td>
-          <td
-            className="xl73"
-            style={{ borderTop: " none", borderLeft: " none" }}
-          >
-            {arr[7][0]}
-          </td>
-          <td
-            className="xl78"
-            style={{ borderTop: " none", borderLeft: " none" }}
-          >
-            {arr[7][1]}
-          </td>
-          <td
-            className="xl67"
-            style={{ borderTop: " none", borderLeft: " none" }}
-          >
-            {arr[7][2]}
-          </td>
-        </tr>
-        <tr height="19" style={{ height: " 14.25pt" }}>
-          <td
-            height="19"
-            className="xl67"
-            style={{ height: " 14.25pt", borderTop: " none" }}
-          >
-            {arr[2][0]}
-          </td>
-          <td className="xl78" style={{ borderLeft: " none" }}>
-            {arr[2][1]}
-          </td>
-          <td
-            className="xl67"
-            style={{ borderTop: " none", borderLeft: " none" }}
-          >
-            {arr[2][2]}
-          </td>
-          <td
-            className="xl67"
-            style={{ borderTop: " none", borderLeft: " none" }}
-          >
-            {arr[5][0]}
-          </td>
-          <td
-            className="xl78"
-            style={{ borderTop: " none", borderLeft: " none" }}
-          >
-            {arr[5][1]}
-          </td>
-          <td
-            className="xl67"
-            align="right"
-            style={{ borderTop: " none", borderLeft: " none" }}
-          >
-            {arr[5][2]}
-          </td>
-          <td
-            className="xl67"
-            style={{ borderTop: " none", borderLeft: " none" }}
-          >
-            {arr[8][0]}
-          </td>
-          <td
-            className="xl78"
-            style={{ borderTop: " none", borderLeft: " none" }}
-          >
-            {arr[8][1]}
-          </td>
-          <td
-            className="xl67"
-            align="right"
-            style={{ borderTop: " none", borderLeft: " none" }}
-          >
-            {arr[8][2]}
-          </td>
-        </tr>
+        {bodyRows}
       </tbody>
     );
   }
@@ -254,7 +102,7 @@ class MoralADD extends React.Component {
 function mapStateToProps(state) {
   return {
     editing: state.global.editing,
-    addItem: state.moral.addItem,
+    adds: state.moral.adds,
   };
 }
 

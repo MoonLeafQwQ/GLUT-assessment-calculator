@@ -1,5 +1,22 @@
 import React from "react";
 import { connect } from "react-redux";
+import {
+  scoreMoral,
+  scoreStudy,
+  scoreAbility,
+  scoreSport,
+  scoreArt,
+  scoreWork,
+  scoreTotal,
+} from "../../../domain/scoring";
+
+function fmt(value) {
+  return value == null ? "" : Number(value).toFixed(2);
+}
+
+function pct(weight) {
+  return Math.round((Number.isFinite(weight) ? weight : 0) * 100);
+}
 
 class TotalShow extends React.Component {
   constructor(props) {
@@ -7,28 +24,47 @@ class TotalShow extends React.Component {
   }
 
   render() {
-    const { ability, moral, sport, study, setting } = this.props;
-    const result =
-      moral * (setting.moral / 100) +
-      study * (setting.study / 100) +
-      sport * (setting.sport / 100) +
-      ability * (setting.ability / 100);
+    const { state, rules } = this.props;
+    const parts = {
+      moral: scoreMoral(state.moral, rules),
+      study: scoreStudy(state.study, rules),
+      ability: scoreAbility(state.ability, rules),
+      sport: scoreSport(state.sport, rules),
+      art: scoreArt(state.art, rules),
+      work: scoreWork(state.work, rules),
+    };
+    const summary = scoreTotal(parts, rules);
+    const total = fmt(summary.total);
+    const dims = [
+      ["德育", "moral"],
+      ["专业学习", "study"],
+      ["科研创新", "ability"],
+      ["体育", "sport"],
+      ["美育", "art"],
+      ["劳动", "work"],
+    ];
+    const termNodes = [];
+    dims.forEach(([label, key], index) => {
+      const p = parts[key];
+      termNodes.push(
+        <span key={`${key}-term`}>
+          {label}总分（{fmt(p ? p.total : null)}）×{pct(p ? p.weight : 0)}%
+        </span>
+      );
+      if (index < dims.length - 1) {
+        termNodes.push(<span key={`${key}-plus`}>+</span>);
+      }
+    });
     return (
       <tbody>
         <tr height="19" style={{ height: " 14.25pt" }}>
           <td
-            colSpan="9"
+            colSpan="6"
             height="19"
             className="xl92"
             style={{ height: " 14.25pt" }}
           >
-            综测总分=德育总分（{moral && moral.toFixed(3)} ）*{setting.moral}
-            %+智育总分（
-            {study && study.toFixed(3)}）*{setting.study}%+体育总分（
-            {sport && sport.toFixed(3)} ）*{setting.sport}%+能力总分（
-            <span>&nbsp; </span>
-            {ability && ability.toFixed(3)} ）*{setting.ability}%=
-            {result && result.toFixed(3)}
+            综测总分={termNodes}=<strong>{total}</strong>
           </td>
         </tr>
       </tbody>
@@ -38,11 +74,8 @@ class TotalShow extends React.Component {
 
 function mapStateToProps(state) {
   return {
-    ability: state.ability.sum > 80 ? 100 : state.ability.sum + 20,
-    moral: state.moral.total,
-    sport: state.sport.total,
-    study: state.study.sum,
-    setting: state.setting,
+    state,
+    rules: state.setting.rules,
   };
 }
 

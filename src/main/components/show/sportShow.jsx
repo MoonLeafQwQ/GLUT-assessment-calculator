@@ -1,5 +1,10 @@
 import React from "react";
 import { connect } from "react-redux";
+import { scoreSport } from "../../../domain/scoring";
+
+function fmt(value) {
+  return value == null ? "" : Number(value).toFixed(2);
+}
 
 class SportShow extends React.Component {
   constructor(props) {
@@ -7,61 +12,71 @@ class SportShow extends React.Component {
   }
 
   render() {
-    let { sum, total, base, baseItem } = this.props;
-    total = total && total.toFixed(3);
-    base = base && base.toFixed(3);
+    const { sport, rules } = this.props;
+    const part = scoreSport(sport || {}, rules || {});
+    const base = fmt(part.base);
+    const addsTotal = fmt(part.addsTotal);
+    const minusTotal = fmt(part.minusTotal);
+    const total = fmt(part.total);
+    const net = part.addsTotal == null && part.minusTotal == null
+      ? ""
+      : fmt((part.addsTotal == null ? 0 : part.addsTotal) - (part.minusTotal == null ? 0 : part.minusTotal));
+    const fitness = sport && sport.fitnessScore != null ? sport.fitnessScore : "";
+    const classA = sport && sport.classScoreA != null ? sport.classScoreA : "";
+    const classB = sport && sport.classScoreB != null ? sport.classScoreB : "";
+    const exercise = sport && sport.exerciseScore != null ? sport.exerciseScore : "";
+    const mode = part.mode === "withoutClass" ? "未开设体育课" : "开设体育课";
     return (
       <tbody>
         <tr height="19" style={{ height: " 14.25pt" }}>
           <td
-            colSpan="9"
+            colSpan="6"
             height="19"
             className="xl90"
-            style={{ height: " 14.25pt" }}
+            style={{ height: " 14.25pt", color: part.error ? "red" : undefined }}
           >
-            体育加减分总计=<font className="font15">(</font>
-            <font className="font0">
-              <strong>{sum}</strong>）<span>&nbsp;&nbsp;&nbsp;&nbsp; </span>
-              体育总分=基础分（
-              <span>&nbsp;&nbsp; </span>
-              <strong>{base}</strong>
-              <span>&nbsp; </span>） +加减分总计（<span>&nbsp; </span>
-              {sum}
-              <span>&nbsp;&nbsp; </span>） =（<span>&nbsp; </span>
-              <strong>{total}</strong>
-              <span>&nbsp; </span>）
-            </font>
+            {part.error ? (
+              <>公式错误：{part.error}</>
+            ) : (
+              <>
+                加分合计=<strong>{addsTotal}</strong>　减分合计=<strong>
+                  {minusTotal}
+                </strong>　净加减分=<strong>{net}</strong>　体育总分=基础分（
+                <strong>{base}</strong>）+净加减分（<strong>{net}</strong>）=（
+                <strong>{total}</strong>）
+              </>
+            )}
           </td>
         </tr>
         <tr height="19" style={{ height: " 14.25pt" }}>
           <td
-            colSpan="9"
+            colSpan="6"
             height="19"
             className="xl85"
             style={{ height: " 14.25pt" }}
           >
-            体育基础分=(学生体质健康测试
-            <font className="font12">
-              &nbsp;
-              {baseItem[0][1]}
-              <span>&nbsp; </span>
-            </font>
-            <font className="font6">*60% + 专业考试成绩</font>
-            <font className="font30">&nbsp;{baseItem[1][1]}</font>
-            <font className="font12"> </font>
-            <font className="font13">
-              <span>&nbsp;</span>
-            </font>
-            <font className="font6">*40%)*70% + 课外锻炼分</font>
-            <font className="font12">&nbsp;{baseItem[2][1]} </font>
-            <font className="font6">
-              <span>&nbsp;</span>*30%={base}
-            </font>
+            当前模式：{mode}（{part.expression || ""}）
+            {part.mode === "withoutClass" ? (
+              <span>
+                体测{fitness === "" ? "" : `=${fitness}`}　课外锻炼分
+                {exercise === "" ? "" : `=${exercise}`}
+              </span>
+            ) : (
+              <span>
+                体测{fitness === "" ? "" : `=${fitness}`}　体育成绩1
+                {classA === "" ? "" : `=${classA}`}　体育成绩2
+                {classB === "" ? "" : `=${classB}`}
+              </span>
+            )}
+            =基础分（<strong>{base}</strong>）
+            {part.error ? (
+              <font className="font13">　公式错误：{part.error}</font>
+            ) : null}
           </td>
         </tr>
         <tr height="19" style={{ height: " 14.25pt" }}>
           <td
-            colSpan="9"
+            colSpan="6"
             height="19"
             className="xl70"
             style={{
@@ -79,7 +94,8 @@ class SportShow extends React.Component {
 
 function mapStateToProps(state) {
   return {
-    ...state.sport,
+    sport: state.sport,
+    rules: state.setting.rules,
   };
 }
 

@@ -5,17 +5,69 @@ import { bindActionCreators } from "redux";
 import { actions, allEditingValue } from "../../reducers/rootReducer.js";
 const { change_editing } = actions;
 
+// Research/innovation sheet on the new template keeps a single adds list
+// (bonus projects entered freely), no categories and no minus entries.
+const HEAD_LABELS = ["加分项目", "加分"];
+
+function tdStyle(rowIndex, groupIndex, colIndex) {
+  const borderTop = rowIndex === 0 ? { borderTop: " none" } : {};
+  if (groupIndex === 0 && colIndex === 0) {
+    return { height: " 14.25pt", ...borderTop };
+  }
+  return colIndex === 0
+    ? { ...borderTop, borderLeft: " none" }
+    : { ...borderTop, borderLeft: " none" };
+}
+
+function tdClass(groupIndex, colIndex) {
+  if (colIndex === 0) {
+    return groupIndex === 0 ? "xl67" : groupIndex === 1 ? "xl69" : "xl73";
+  }
+  return colIndex === 1 ? "xl78" : "xl67";
+}
+
+// Ability entries carry { name, desc, points }.
+function entryValue(entry, colIndex) {
+  if (!entry) return "";
+  if (colIndex === 0) return entry.name || "";
+  return entry.points == null ? "" : entry.points;
+}
+
 class AbilityOne extends React.Component {
   constructor(props) {
     super(props);
   }
 
   render() {
-    let arr = this.props.Item;
+    const adds = (Array.isArray(this.props.adds) ? this.props.adds : []).filter(
+      (row) => row && (String(row.name || "").trim() || String(row.desc || "").trim() || Number.isFinite(row.points))
+    );
+    const bodyRows = [];
+    const rowCount = Math.ceil(adds.length / 3);
+    for (let r = 0; r < rowCount; r += 1) {
+      const cells = [];
+      for (let g = 0; g < 3; g += 1) {
+        const idx = r * 3 + g;
+        const entry = idx < adds.length ? adds[idx] : null;
+        for (let c = 0; c < 2; c += 1) {
+          cells.push(
+            <td
+              key={`${r}-${g}-${c}`}
+              className={tdClass(g, c)}
+              align={c === 1 ? "right" : undefined}
+              style={tdStyle(r, g, c)}
+            >
+              {entry ? entryValue(entry, c) : ""}
+            </td>
+          );
+        }
+      }
+      bodyRows.push(<tr key={r}>{cells}</tr>);
+    }
     return (
       <tbody
         className={
-          "component " +
+          "component clickable-section " +
           (this.props.editing === allEditingValue.ABILITY_ONE && "active")
         }
         onClick={() => {
@@ -27,291 +79,23 @@ class AbilityOne extends React.Component {
         }}
       >
         <tr height="19" style={{ height: " 14.25pt" }}>
-          <td
-            height="19"
-            className="xl71"
-            style={{ height: " 14.25pt", borderTop: " none" }}
-          >
-            加分项目
-          </td>
-          <td
-            className="xl71"
-            style={{ borderTop: " none", borderLeft: " none" }}
-          >
-            加分原因
-          </td>
-          <td
-            className="xl71"
-            style={{ borderTop: " none", borderLeft: " none" }}
-          >
-            加分
-          </td>
-          <td
-            className="xl71"
-            style={{ borderTop: " none", borderLeft: " none" }}
-          >
-            加分项目
-          </td>
-          <td
-            className="xl71"
-            style={{ borderTop: " none", borderLeft: " none" }}
-          >
-            加分原因
-          </td>
-          <td
-            className="xl71"
-            style={{ borderTop: " none", borderLeft: " none" }}
-          >
-            加分
-          </td>
-          <td
-            className="xl71"
-            style={{ borderTop: " none", borderLeft: " none" }}
-          >
-            加分项目
-          </td>
-          <td
-            className="xl71"
-            style={{ borderTop: " none", borderLeft: " none" }}
-          >
-            加分原因
-          </td>
-          <td
-            className="xl71"
-            style={{ borderTop: " none", borderLeft: " none" }}
-          >
-            加分
-          </td>
+          {[0, 1, 2].map((g) =>
+            HEAD_LABELS.map((label, c) => (
+              <td
+                key={`${g}-${c}`}
+                className="xl66"
+                style={
+                  g === 0 && c === 0
+                    ? { borderTop: " none" }
+                    : { borderTop: " none", borderLeft: " none" }
+                }
+              >
+                {label}
+              </td>
+            ))
+          )}
         </tr>
-        <tr height="19" style={{ height: " 14.25pt" }}>
-          <td
-            rowSpan="5"
-            height="95"
-            className="xl72"
-            style={{ height: " 71.25pt", borderTop: " none" }}
-          >
-            技能证书
-          </td>
-          <td
-            className="xl69"
-            style={{ borderTop: " none", borderLeft: " none" }}
-          >
-            {arr[0][1][0] && arr[0][1][0][0]}
-          </td>
-          <td
-            className="xl73"
-            style={{ borderTop: " none", borderLeft: " none" }}
-          >
-            {arr[0][1][0] && arr[0][1][0][1]}
-          </td>
-          <td rowSpan="5" className="xl72" style={{ borderTop: " none" }}>
-            社会实践
-          </td>
-          <td
-            className="xl69"
-            style={{ borderTop: " none", borderLeft: " none" }}
-          >
-            {arr[1][1][0] && arr[1][1][0][0]}
-          </td>
-          <td
-            className="xl72"
-            style={{ borderTop: " none", borderLeft: " none" }}
-          >
-            {arr[1][1][0] && arr[1][1][0][1]}
-          </td>
-          <td
-            rowSpan="5"
-            className="xl74"
-            width="111"
-            style={{ borderTop: " none", width: " 83pt" }}
-          >
-            表彰奖励(相同性质表彰只加一次分)
-          </td>
-          <td
-            className="xl75"
-            style={{ borderTop: " none", borderLeft: " none" }}
-          >
-            {arr[2][1][0] && arr[2][1][0][0]}
-          </td>
-          <td
-            className="xl72"
-            style={{ borderTop: " none", borderLeft: " none" }}
-          >
-            {arr[2][1][0] && arr[2][1][0][1]}
-          </td>
-        </tr>
-        <tr height="19" style={{ height: " 14.25pt" }}>
-          <td
-            height="19"
-            className="xl69"
-            style={{
-              height: " 14.25pt",
-              borderTop: " none",
-              borderLeft: " none",
-            }}
-          >
-            {arr[0][1][1] && arr[0][1][1][0]}
-          </td>
-          <td
-            className="xl73"
-            style={{ borderTop: " none", borderLeft: " none" }}
-          >
-            {arr[0][1][1] && arr[0][1][1][1]}
-          </td>
-          <td
-            className="xl75"
-            style={{ borderTop: " none", borderLeft: " none" }}
-          >
-            {arr[1][1][1] && arr[1][1][1][0]}
-          </td>
-          <td
-            className="xl72"
-            style={{ borderTop: " none", borderLeft: " none" }}
-          >
-            {arr[1][1][1] && arr[1][1][1][1]}
-          </td>
-          <td
-            className="xl75"
-            style={{ borderTop: " none", borderLeft: " none" }}
-          >
-            {arr[2][1][1] && arr[2][1][1][0]}
-          </td>
-          <td
-            className="xl72"
-            style={{ borderTop: " none", borderLeft: " none" }}
-          >
-            {arr[2][1][1] && arr[2][1][1][1]}
-          </td>
-        </tr>
-        <tr height="19" style={{ height: " 14.25pt" }}>
-          <td
-            height="19"
-            className="xl69"
-            style={{
-              height: " 14.25pt",
-              borderTop: " none",
-              borderLeft: " none",
-            }}
-          >
-            {arr[0][1][2] && arr[0][1][2][0]}
-          </td>
-          <td
-            className="xl73"
-            style={{ borderTop: " none", borderLeft: " none" }}
-          >
-            {arr[0][1][2] && arr[0][1][2][1]}
-          </td>
-          <td
-            className="xl75"
-            style={{ borderTop: " none", borderLeft: " none" }}
-          >
-            {arr[1][1][2] && arr[1][1][2][0]}
-          </td>
-          <td
-            className="xl72"
-            style={{ borderTop: " none", borderLeft: " none" }}
-          >
-            {arr[1][1][2] && arr[1][1][2][1]}
-          </td>
-          <td
-            className="xl75"
-            style={{ borderTop: " none", borderLeft: " none" }}
-          >
-            {arr[2][1][2] && arr[2][1][2][0]}
-          </td>
-          <td
-            className="xl72"
-            style={{ borderTop: " none", borderLeft: " none" }}
-          >
-            {arr[2][1][2] && arr[2][1][2][1]}
-          </td>
-        </tr>
-        <tr height="19" style={{ height: " 14.25pt" }}>
-          <td
-            height="19"
-            className="xl69"
-            style={{
-              height: " 14.25pt",
-              borderTop: " none",
-              borderLeft: " none",
-            }}
-          >
-            {arr[0][1][3] && arr[0][1][3][0]}
-          </td>
-          <td
-            className="xl73"
-            style={{ borderTop: " none", borderLeft: " none" }}
-          >
-            {arr[0][1][3] && arr[0][1][3][1]}
-          </td>
-          <td
-            className="xl75"
-            style={{ borderTop: " none", borderLeft: " none" }}
-          >
-            {arr[1][1][3] && arr[1][1][3][0]}
-          </td>
-          <td
-            className="xl72"
-            style={{ borderTop: " none", borderLeft: " none" }}
-          >
-            {arr[1][1][3] && arr[1][1][3][1]}
-          </td>
-          <td
-            className="xl75"
-            style={{ borderTop: " none", borderLeft: " none" }}
-          >
-            {arr[2][1][3] && arr[2][1][3][0]}
-          </td>
-          <td
-            className="xl72"
-            style={{ borderTop: " none", borderLeft: " none" }}
-          >
-            {arr[2][1][3] && arr[2][1][3][1]}
-          </td>
-        </tr>
-        <tr height="19" style={{ height: " 14.25pt" }}>
-          <td
-            height="19"
-            className="xl69"
-            style={{
-              height: " 14.25pt",
-              borderTop: " none",
-              borderLeft: " none",
-            }}
-          >
-            {arr[0][1][4] && arr[0][1][4][0]}
-          </td>
-          <td
-            className="xl73"
-            style={{ borderTop: " none", borderLeft: " none" }}
-          >
-            {arr[0][1][4] && arr[0][1][4][1]}
-          </td>
-          <td
-            className="xl69"
-            style={{ borderTop: " none", borderLeft: " none" }}
-          >
-            {arr[1][1][4] && arr[1][1][4][0]}
-          </td>
-          <td
-            className="xl72"
-            style={{ borderTop: " none", borderLeft: " none" }}
-          >
-            {arr[1][1][4] && arr[1][1][4][1]}
-          </td>
-          <td
-            className="xl75"
-            style={{ borderTop: " none", borderLeft: " none" }}
-          >
-            {arr[2][1][4] && arr[2][1][4][0]}
-          </td>
-          <td
-            className="xl72"
-            style={{ borderTop: " none", borderLeft: " none" }}
-          >
-            {arr[2][1][4] && arr[2][1][4][1]}
-          </td>
-        </tr>
+        {bodyRows}
       </tbody>
     );
   }
@@ -320,7 +104,7 @@ class AbilityOne extends React.Component {
 function mapStateToProps(state) {
   return {
     editing: state.global.editing,
-    Item: state.ability.partOne,
+    adds: state.ability.adds,
   };
 }
 

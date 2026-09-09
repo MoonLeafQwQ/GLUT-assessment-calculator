@@ -13,6 +13,8 @@ import TopShow from "./show/topShow.jsx";
 import TotalShow from "./show/totalShow.jsx";
 import Sport from "./sport/sport.jsx";
 import Study from "./study/study.jsx";
+import ArtSection from "./art/artSection.jsx";
+import WorkSection from "./work/workSection.jsx";
 import { connect } from "react-redux";
 import { Modal } from "antd";
 
@@ -22,6 +24,8 @@ import { actions as moralActions } from "../reducers/moral";
 import { actions as messageActions } from "../reducers/userMessage";
 import { actions as studyActions } from "../reducers/study";
 import { actions as sportActions } from "../reducers/sport";
+import { actions as artActions } from "../reducers/art";
+import { actions as workActions } from "../reducers/work";
 
 import { QqOutlined } from "@ant-design/icons";
 
@@ -31,9 +35,13 @@ const { rebuild_moral_obj } = moralActions;
 const { rebuild_message_obj } = messageActions;
 const { rebuild_study_obj } = studyActions;
 const { rebuild_sport_obj } = sportActions;
+const { rebuild_art_obj } = artActions;
+const { rebuild_work_obj } = workActions;
 
-import { allEditingValue } from "../reducers/rootReducer.js";
+import { actions, allEditingValue } from "../reducers/rootReducer.js";
 import { bindActionCreators } from "redux";
+
+const { change_editing } = actions;
 
 class App extends React.Component {
   constructor(props) {
@@ -48,16 +56,21 @@ class App extends React.Component {
     window.Setting.onOpenSetting(() => {
       window.Setting.openSetting(this.props.setting);
     });
+    window.Setting.onOpenFormulas(() => {
+      window.Setting.openFormulas(this.props.setting);
+    });
     window.Setting.onApplySetting((e, newSetting) =>
       this.props.change_item(newSetting)
     );
     window.ImportFile.onImportDataObj((e, dataObj) => {
-      const { ability, message, moral, sport, study } = dataObj;
+      const { ability, art, message, moral, sport, study, work } = dataObj;
       this.props.rebuild_ability_obj(ability);
+      this.props.rebuild_art_obj(art);
       this.props.rebuild_moral_obj(moral);
       this.props.rebuild_message_obj(message);
       this.props.rebuild_study_obj(study);
       this.props.rebuild_sport_obj(sport);
+      this.props.rebuild_work_obj(work);
     });
     window.ExportFile.onSpawnXLSX(async (e) => {
       await window.ExportFile.spawnXLSX(this.props.dataObj);
@@ -65,13 +78,17 @@ class App extends React.Component {
   }
 
   unload(e) {
-    const { message, moral, sport, study, ability, setting } = this.props;
+    const { message, moral, sport, study, ability, art, work, setting } =
+      this.props;
     localStorage.setItem("message", JSON.stringify(message));
     localStorage.setItem("moral", JSON.stringify(moral));
     localStorage.setItem("sport", JSON.stringify(sport));
     localStorage.setItem("study", JSON.stringify(study));
     localStorage.setItem("ability", JSON.stringify(ability));
+    localStorage.setItem("art", JSON.stringify(art));
+    localStorage.setItem("work", JSON.stringify(work));
     localStorage.setItem("setting", JSON.stringify(setting));
+    localStorage.setItem("__schema", "v2");
   }
 
   render() {
@@ -86,8 +103,18 @@ class App extends React.Component {
         </Modal>
         <Control></Control>
         <div className="tips">
-          <div className="msg">如果它对你有帮助，请给我一颗星星→</div>
-          <a onClick={() => window.Global.openShell()}>
+          <a
+            className="repo-link"
+            onClick={() =>
+              window.Global.openShell(
+                "https://github.com/millnasis/GLUT-assessment-calculator"
+              )
+            }
+          >
+            原项目：millnasis/GLUT-assessment-calculator
+          </a>
+          <div className="msg">如果它对你有帮助，请给原作者一颗星星→</div>
+          <a onClick={() => window.Global.openShell("https://github.com/millnasis/GLUT-assessment-calculator")}>
             <img className="img"></img>
           </a>
           <div className="msg">个人QQ→</div>
@@ -107,53 +134,80 @@ class App extends React.Component {
               border="0"
               cellPadding="0"
               cellSpacing="0"
-              width="827"
+              width="100%"
               style={{
-                borderCollapse: " collapse",
-                tableLayout: " fixed",
-                width: " 620pt",
+                borderCollapse: "collapse",
+                tableLayout: "fixed",
+                width: "100%",
               }}
             >
               <Message></Message>
-              <tbody>
+              <tbody
+                className="clickable-section"
+                onClick={() => {
+                  this.props.change_editing(
+                    this.props.editing === allEditingValue.MORAL_ADD
+                      ? allEditingValue.NONE
+                      : allEditingValue.MORAL_ADD
+                  );
+                }}
+              >
                 <tr height="24" style={{ height: " 18pt" }}>
                   <td
-                    colSpan="9"
+                    colSpan="6"
                     height="24"
                     className="xl89"
                     style={{ height: " 18pt" }}
                   >
-                    第一部分：德育素质测评分
+                    德育素质测评分
                   </td>
                 </tr>
               </tbody>
               <MoralADD></MoralADD>
               <MoralMinus></MoralMinus>
               <MoralShow></MoralShow>
-              <tbody>
+              <tbody
+                className="clickable-section"
+                onClick={() => {
+                  this.props.change_editing(
+                    this.props.editing === allEditingValue.SPORT
+                      ? allEditingValue.NONE
+                      : allEditingValue.SPORT
+                  );
+                }}
+              >
                 <tr height="19" style={{ height: " 14.25pt" }}>
                   <td
-                    colSpan="9"
+                    colSpan="6"
                     height="19"
                     className="xl89"
                     style={{ height: " 14.25pt" }}
                   >
-                    第二部分：体育素质测评分
+                    体育素质测评分
                   </td>
                 </tr>
               </tbody>
               <Sport></Sport>
               <SportShow></SportShow>
               <Study></Study>
-              <tbody>
+              <tbody
+                className="clickable-section"
+                onClick={() => {
+                  this.props.change_editing(
+                    this.props.editing === allEditingValue.ABILITY_ONE
+                      ? allEditingValue.NONE
+                      : allEditingValue.ABILITY_ONE
+                  );
+                }}
+              >
                 <tr height="19" style={{ height: " 14.25pt" }}>
                   <td
-                    colSpan="9"
+                    colSpan="6"
                     height="19"
                     className="xl89"
                     style={{ height: " 14.25pt" }}
                   >
-                    第四部分：能力素质测评分
+                    科研创新综合分
                   </td>
                 </tr>
               </tbody>
@@ -161,6 +215,8 @@ class App extends React.Component {
               <AbilityTwo></AbilityTwo>
               <AbilityThree></AbilityThree>
               <AbilityShow></AbilityShow>
+              <ArtSection></ArtSection>
+              <WorkSection></WorkSection>
               <TotalShow></TotalShow>
               <tbody>
                 <tr height="0" style={{ display: " none" }}>
@@ -170,10 +226,6 @@ class App extends React.Component {
                   <td width="99" style={{ width: " 74pt" }}></td>
                   <td width="113" style={{ width: " 85pt" }}></td>
                   <td width="36" style={{ width: " 27pt" }}></td>
-                  <td width="111" style={{ width: " 83pt" }}></td>
-                  <td width="101" style={{ width: " 76pt" }}></td>
-                  <td width="40" style={{ width: " 30pt" }}></td>
-                  <td width="72" style={{ width: " 54pt" }}></td>
                 </tr>
               </tbody>
             </table>
@@ -194,6 +246,8 @@ function mapStateToProps(state) {
       sport: state.sport,
       study: state.study,
       ability: state.ability,
+      art: state.art,
+      work: state.work,
       setting: state.setting,
     },
   };
@@ -202,11 +256,14 @@ function mapStateToProps(state) {
 function mapDispatchToProps(dispatch) {
   return {
     rebuild_ability_obj: bindActionCreators(rebuild_ability_obj, dispatch),
+    rebuild_art_obj: bindActionCreators(rebuild_art_obj, dispatch),
     rebuild_moral_obj: bindActionCreators(rebuild_moral_obj, dispatch),
     rebuild_message_obj: bindActionCreators(rebuild_message_obj, dispatch),
     rebuild_study_obj: bindActionCreators(rebuild_study_obj, dispatch),
     rebuild_sport_obj: bindActionCreators(rebuild_sport_obj, dispatch),
+    rebuild_work_obj: bindActionCreators(rebuild_work_obj, dispatch),
     change_item: bindActionCreators(change_item, dispatch),
+    change_editing: bindActionCreators(change_editing, dispatch),
   };
 }
 

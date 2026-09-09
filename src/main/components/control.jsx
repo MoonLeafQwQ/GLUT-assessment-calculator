@@ -10,6 +10,8 @@ import StudyControl from "./study/studyControl.jsx";
 import AbilityOneControl from "./ability/abilityOneControl.jsx";
 import AbilityTwoControl from "./ability/abilityTwoControl.jsx";
 import AbilityThreeControl from "./ability/abilityThreeControl.jsx";
+import ArtControl from "./art/artControl.jsx";
+import WorkControl from "./work/workControl.jsx";
 
 function switchRender(editing) {
   switch (editing) {
@@ -29,10 +31,15 @@ function switchRender(editing) {
       return <AbilityTwoControl></AbilityTwoControl>;
     case allEditingValue.ABILITY_THREE:
       return <AbilityThreeControl></AbilityThreeControl>;
+    case allEditingValue.ART:
+      return <ArtControl></ArtControl>;
+    case allEditingValue.WORK:
+      return <WorkControl></WorkControl>;
     default:
       return <div></div>;
   }
 }
+
 class Control extends React.Component {
   constructor(props) {
     super(props);
@@ -43,8 +50,7 @@ class Control extends React.Component {
     return (
       <div
         className={
-          "control" +
-          (this.props.editing === allEditingValue.NONE ? " active" : "")
+          "control" + (editing === allEditingValue.NONE ? " active" : "")
         }
         style={{ position: "relative" }}
       >

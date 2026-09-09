@@ -4,6 +4,7 @@ import { bindActionCreators } from "redux";
 
 import { actions, allEditingValue } from "../../reducers/rootReducer.js";
 const { change_editing } = actions;
+import { scoreStudy } from "../../../domain/scoring";
 
 class Study extends React.Component {
   constructor(props) {
@@ -11,13 +12,14 @@ class Study extends React.Component {
   }
 
   render() {
-    let sum = this.props.sum
-      ? this.props.sum.toFixed(3)
-      : this.props.sum;
+    const { study, rules } = this.props;
+    const part = scoreStudy(study || {}, rules || {});
+    const sum =
+      part.total == null ? "" : Number(part.total).toFixed(2);
     return (
       <tbody
         className={
-          "component " +
+          "component clickable-section " +
           (this.props.editing === allEditingValue.STUDY && "active")
         }
         onClick={() => {
@@ -30,17 +32,17 @@ class Study extends React.Component {
       >
         <tr height="19" style={{ height: " 14.25pt" }}>
           <td
-            colSpan="9"
+            colSpan="6"
             height="19"
             className="xl89"
             style={{ height: " 14.25pt" }}
           >
-            第三部分：智育素质测评分
+            智育素质测评分
           </td>
         </tr>
         <tr height="19" style={{ height: " 14.25pt" }}>
           <td
-            colSpan="9"
+            colSpan="6"
             height="19"
             className="xl91"
             style={{ height: " 14.25pt" }}
@@ -50,7 +52,7 @@ class Study extends React.Component {
         </tr>
         <tr height="19" style={{ height: " 14.25pt" }}>
           <td
-            colSpan="9"
+            colSpan="6"
             height="19"
             className="xl91"
             style={{ height: " 14.25pt" }}
@@ -60,7 +62,7 @@ class Study extends React.Component {
         </tr>
         <tr height="19" style={{ height: " 14.25pt" }}>
           <td
-            colSpan="9"
+            colSpan="6"
             height="19"
             className="xl66"
             style={{ height: " 14.25pt" }}
@@ -78,7 +80,8 @@ class Study extends React.Component {
 function mapStateToProps(state) {
   return {
     editing: state.global.editing,
-    sum: state.study.sum,
+    study: state.study,
+    rules: state.setting.rules,
   };
 }
 

@@ -11,20 +11,22 @@ import {
 import { ArrowLeftOutlined } from "@ant-design/icons";
 const { change_editing } = rootActions;
 
-const totalState = ["collegeName","gradeAndClass", "IdNum", "name", "politicStatus"];
+const totalState = ["collegeName", "major", "gradeAndClass", "IdNum", "name", "schoolYear"];
 
 function renderState(stateName) {
   switch (stateName) {
     case totalState[0]:
       return "学院";
     case totalState[1]:
-      return "专业班级";
+      return "专业";
     case totalState[2]:
-      return "学号";
+      return "班级";
     case totalState[3]:
-      return "姓名";
+      return "学号";
     case totalState[4]:
-      return "政治面貌";
+      return "姓名";
+    case totalState[5]:
+      return "学年";
   }
 }
 
