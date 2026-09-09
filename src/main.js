@@ -5,14 +5,50 @@ const {
   dialog,
   Menu,
   shell,
+  nativeTheme,
 } = require("electron");
 const fs = require("fs");
 const path = require("path");
+const { execFile } = require("child_process");
 const modalPath = path.join(__dirname, "../renderer/xlsx/模板.xlsx");
 const {
   spawnResultTableFromDataObj,
   parseTableToDataObj,
 } = require("./tools/tools");
+
+function applyImmersiveDarkMode(win, dark) {
+  if (!win || win.isDestroyed() || process.platform !== "win32") return;
+  try {
+    const buf = win.getNativeWindowHandle();
+    const hwnd = buf.readBigUInt64LE(0).toString();
+    const value = dark ? 1 : 0;
+    const script = `
+Add-Type -Namespace W -Name N -MemberDefinition '[DllImport("dwmapi.dll")] public static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int attrValue, int attrSize);';
+$v = ${value};
+[W.N]::DwmSetWindowAttribute([IntPtr]${hwnd}, 20, [ref]$v, 4) | Out-Null;
+[W.N]::DwmSetWindowAttribute([IntPtr]${hwnd}, 19, [ref]$v, 4) | Out-Null;
+`;
+    execFile(
+      "powershell",
+      ["-NoProfile", "-NonInteractive", "-Command", script],
+      { windowsHide: true },
+      () => {}
+    );
+  } catch (e) {
+    // ignore
+  }
+}
+
+function windowBackgroundColor() {
+  return nativeTheme.shouldUseDarkColors ? "#1e1e22" : "#ffffff";
+}
+
+function applyWindowBackgrounds(wins) {
+  const color = windowBackgroundColor();
+  wins.forEach((w) => {
+    if (w && !w.isDestroyed()) w.setBackgroundColor(color);
+  });
+}
 
 if (process.defaultApp) {
   if (process.argv.length >= 2) {
@@ -29,8 +65,12 @@ if (require("electron-squirrel-startup")) {
 }
 
 function createWindow() {
+  const bgColor = windowBackgroundColor();
   const settingPage = new BrowserWindow({
     show: false,
+    width: 860,
+    height: 900,
+    backgroundColor: bgColor,
     webPreferences: {
       preload: SETTING_PRELOAD_WEBPACK_ENTRY,
     },
@@ -45,6 +85,9 @@ function createWindow() {
   const win = new BrowserWindow({
     width: 1024,
     height: 800,
+    minWidth: 720,
+    minHeight: 560,
+    backgroundColor: bgColor,
     webPreferences: {
       preload: MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY,
     },
@@ -52,6 +95,9 @@ function createWindow() {
 
   // and load the index.html of the app.
   win.loadURL(MAIN_WINDOW_WEBPACK_ENTRY);
+
+  applyImmersiveDarkMode(win, nativeTheme.shouldUseDarkColors);
+  applyImmersiveDarkMode(settingPage, nativeTheme.shouldUseDarkColors);
 
   const menu = Menu.buildFromTemplate([
     {
@@ -62,7 +108,7 @@ function createWindow() {
           click: async () => {
             const stateObj = await dialog.showOpenDialog({
               title: "打开综测表单，格式仅支持xlsx",
-              filters: [{ name: "综测文件", extensions: ["xlsx", "xls"] }],
+              filters: [{ name: "综测文件", extensions: ["xlsx"] }],
               properties: ["openFile"],
               defaultPath: path.join(__dirname, "../../"),
             });
@@ -103,6 +149,10 @@ function createWindow() {
           label: "设置分数占比",
           click: () => win.webContents.send("open-setting"),
         },
+        {
+          label: "自定义公式",
+          click: () => win.webContents.send("open-formulas"),
+        },
       ],
     },
   ]);
@@ -124,10 +174,9 @@ function createWindow() {
     settingPage.destroy();
   });
 
-  ipcMain.handle("open-shell", async () => {
-    shell.openExternal(
-      "https://github.com/millnasis/GLUT-assessment-calculator"
-    );
+  ipcMain.handle("open-shell", async (e, url) => {
+    const target = typeof url === "string" && url ? url : "https://github.com/millnasis/GLUT-assessment-calculator";
+    shell.openExternal(target);
   });
 
   ipcMain.handle("export-xlsx", async (e, ...args) => {
@@ -140,7 +189,15 @@ function createWindow() {
     if (stateObj.canceled) {
       return;
     }
-    await spawnResultTableFromDataObj(dataObj, stateObj.filePath, modalPath);
+    try {
+      await spawnResultTableFromDataObj(dataObj, stateObj.filePath, modalPath);
+    } catch (error) {
+      await dialog.showMessageBox({
+        title: "导出失败",
+        type: "error",
+        message: `导出失败：${error && error.message ? error.message : error}`,
+      });
+    }
   });
 
   ipcMain.handle("send-setting-object", async (e, ...args) => {
@@ -149,9 +206,21 @@ function createWindow() {
     settingPage.show();
   });
 
+  ipcMain.handle("send-formulas-object", async (e, ...args) => {
+    const settingObj = args[0];
+    settingPage.webContents.send("get-formulas", settingObj);
+    settingPage.show();
+  });
+
   ipcMain.handle("new-setting-object", async (e, ...args) => {
     const settingObj = args[0];
     win.webContents.send("apply-setting", settingObj);
+  });
+
+  nativeTheme.on("updated", () => {
+    applyWindowBackgrounds([win, settingPage]);
+    applyImmersiveDarkMode(win, nativeTheme.shouldUseDarkColors);
+    applyImmersiveDarkMode(settingPage, nativeTheme.shouldUseDarkColors);
   });
 }
 
