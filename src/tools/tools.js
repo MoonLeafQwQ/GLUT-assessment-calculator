@@ -1,513 +1,497 @@
 const ExcelJS = require("exceljs");
+const {
+  makeDefaultRules,
+  scoreMoral,
+  scoreStudy,
+  scoreAbility,
+  scoreSport,
+  scoreArt,
+  scoreWork,
+  scoreTotal,
+} = require("../domain/scoring");
 
-function handleText(value) {
-  if (value instanceof Object) {
-    let str = "";
-    value.richText.forEach((e) => {
-      str += e.text;
-    });
-    return str;
+const SHEETS = {
+  summary: "综测汇总",
+  moral: "思想品德综合分",
+  study: "专业学习分",
+  ability: "科研创新综合分",
+  sport: "体育综合分",
+  art: "美育综合分",
+  work: "劳动素质与实践能力综合分",
+};
+
+const REQUIRED_SHEETS = Object.values(SHEETS);
+
+const SHEET_ALIASES = {
+  "专业学习分": ["专业学习综合分"],
+};
+
+function sheetOrThrow(workbook, name) {
+  const found = workbook.getWorksheet(name);
+  if (found) return found;
+  for (const alias of SHEET_ALIASES[name] || []) {
+    const aliased = workbook.getWorksheet(alias);
+    if (aliased) return aliased;
   }
-  return value;
+  throw new Error("缺少工作表: " + name);
 }
 
-function fixed2(num) {
-  return Math.floor(num * 100) / 100;
-}
-function fixed3(num) {
-  return Math.floor(num * 1000) / 1000;
+function asText(value) {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "string" || typeof value === "number") return String(value);
+  if (Array.isArray(value.richText)) return value.richText.map((item) => item.text || "").join("");
+  if (value.result !== undefined && value.result !== null) return asText(value.result);
+  if (value.text !== undefined) return String(value.text);
+  return String(value);
 }
 
-/**
- *
- * @param {{message:{gradeAndClass:String,IdNum:String,name:String,politicStatus:String},moral:{addItem:Array<Array>,minusItem:Array<Array>,sum:int,total:int},sport:{baseItem:Array<Array>,addItem:Array<Array>,minusItem:Array<Array>,sum:int,total:int,base:int},study:{item:Array<Array>,sum:int},ability:{partOne:Array<Array>,partTwo:Array<Array>,partThree:Array<Array>,sum:int},setting:{moral:int,study:int,sport:int,ability:int}}} dataObj
- * @param {String} filePath
- */
-export async function spawnResultTableFromDataObj(dataObj, filePath,modalPath) {
-  const { ability, message, moral, sport, study, setting } = dataObj;
+function asNumber(value) {
+  const text = asText(value).trim();
+  if (text === "") return null;
+  const number = Number(text);
+  return Number.isFinite(number) ? number : null;
+}
+
+function normalizeText(value) {
+  return asText(value).replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+}
+
+function item(name = "", desc = "", points = null) {
+  return { name, desc, points };
+}
+
+function parseItemsCell(value) {
+  return normalizeText(value)
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line && line !== "无")
+    .map((line) => {
+      const match = line.match(/([+-])\s*([0-9]+(?:\.[0-9]+)?)\s*[；;。]?$/);
+      let name = line
+        .slice(0, match ? match.index : line.length)
+        .replace(/^\s*\d+\s*[.、．]\s*/, "")
+        .replace(/[；;。]+$/, "")
+        .trim();
+      if (name === "加分项目" || name === "减分项目" || name === "科研创新能力加分项") {
+        if (!match || Number(match[2]) === 1) return null;
+      }
+      let desc = "";
+      const descMatch = name.match(/（([^（）]+)）\s*$/);
+      if (descMatch) {
+        desc = descMatch[1].trim();
+        name = name.slice(0, descMatch.index).trim();
+      }
+      if (!name && !match) return null;
+      return item(name, desc, match ? Number(match[2]) : null);
+    })
+    .filter(Boolean);
+}
+
+function serializeItemsCell(rows, sign) {
+  const list = Array.isArray(rows)
+    ? rows.filter((row) => row && (String(row.name || "").trim() || Number.isFinite(row.points)))
+    : [];
+  if (!list.length) return "无";
+  return list
+    .map((row, index) => {
+      const name = String(row.name || "").trim();
+      const desc = String(row.desc || "").trim();
+      const label = desc && desc !== name ? `${name}（${desc}）` : name;
+      const points = Number.isFinite(row.points) ? `${sign === "minus" ? "-" : "+"}${row.points}` : "";
+      return `${index + 1}.${label}${points}；`;
+    })
+    .join("\n");
+}
+
+function validateSheets(workbook) {
+  REQUIRED_SHEETS.forEach((name) => sheetOrThrow(workbook, name));
+}
+
+function findDataStartRow(sheet, fromRow) {
+  const start = Number(fromRow) || 1;
+  for (let row = start; row <= sheet.rowCount; row += 1) {
+    const first = asText(sheet.getCell(row, 1).value).trim();
+    const second = asText(sheet.getCell(row, 2).value).trim();
+    if (first === "序号" || (first === "序号" && second === "学号")) {
+      return row + 1;
+    }
+  }
+  return start + 1;
+}
+
+function findHeaderRow(sheet, fromRow) {
+  const start = Number(fromRow) || 1;
+  for (let row = start; row <= sheet.rowCount; row += 1) {
+    if (asText(sheet.getCell(row, 1).value).trim() === "序号") return row;
+  }
+  return start;
+}
+
+function findColByText(sheet, headerRow, keywords) {
+  const maxCol = sheet.columnCount || 30;
+  for (let col = 1; col <= maxCol; col += 1) {
+    const text = asText(sheet.getCell(headerRow, col).value).trim();
+    if (!text) continue;
+    for (const kw of keywords) {
+      if (text.indexOf(kw) >= 0) return col;
+    }
+  }
+  return 0;
+}
+
+function findRow(sheet, idColumn, idNumber, nameColumn, preferredRow) {
+  const id = String(idNumber || "").trim();
+  const start = Number(preferredRow) || 1;
+  if (start > 0 && start <= sheet.rowCount) {
+    const prefId = asText(sheet.getCell(start, idColumn).value).trim();
+    const prefName = asText(sheet.getCell(start, nameColumn).value).trim();
+    if ((id && prefId === id) || (!id && prefName)) return start;
+  }
+  if (id) {
+    for (let row = start; row <= sheet.rowCount; row += 1) {
+      if (asText(sheet.getCell(row, idColumn).value).trim() === id) return row;
+    }
+  }
+  for (let row = start; row <= sheet.rowCount; row += 1) {
+    if (asText(sheet.getCell(row, nameColumn).value).trim()) return row;
+  }
+  return start;
+}
+
+function columnName(number) {
+  let result = "";
+  let value = number;
+  while (value > 0) {
+    const remainder = (value - 1) % 26;
+    result = String.fromCharCode(65 + remainder) + result;
+    value = Math.floor((value - 1) / 26);
+  }
+  return result;
+}
+
+function setFormula(cell, formula, result) {
+  const body = String(formula || "").replace(/^=+/, "");
+  if (Number.isFinite(result)) {
+    cell.value = { formula: body, result };
+  } else {
+    cell.value = null;
+  }
+}
+
+function setNumber(cell, value) {
+  cell.value = Number.isFinite(value) ? value : null;
+}
+
+function applySummaryStyle(cell) {
+  cell.alignment = { vertical: "middle", horizontal: "center" };
+  const oldFont = cell.font || {};
+  cell.font = {
+    name: oldFont.name || "宋体",
+    size: oldFont.size || 12,
+    bold: oldFont.bold,
+    italic: oldFont.italic,
+    underline: oldFont.underline,
+    strike: oldFont.strike,
+    color: oldFont.color,
+    family: oldFont.family,
+    scheme: oldFont.scheme,
+  };
+}
+
+function writeIdentity(sheet, row, message) {
+  sheet.getCell(row, 1).value = 1;
+  sheet.getCell(row, 2).value = message.IdNum || "";
+  sheet.getCell(row, 3).value = message.name || "";
+}
+
+function writeDimensionRows(sheet, row, state, message, part, addColumn, minusColumn, totalColumn, contributionColumn, baseColumn) {
+  writeIdentity(sheet, row, message);
+  if (baseColumn) setNumber(sheet.getCell(row, baseColumn), part.base);
+  sheet.getCell(row, addColumn).value = serializeItemsCell(state.adds, "adds");
+  setNumber(sheet.getCell(row, addColumn + 1), part.addsTotal == null ? 0 : part.addsTotal);
+  if (minusColumn) {
+    sheet.getCell(row, minusColumn).value = serializeItemsCell(state.minus, "minus");
+    setNumber(sheet.getCell(row, minusColumn + 1), part.minusTotal == null ? 0 : part.minusTotal);
+  }
+  setNumber(sheet.getCell(row, totalColumn), part.total);
+  setFormula(sheet.getCell(row, contributionColumn), `ROUND(${columnName(totalColumn)}${row}*${part.weight},2)`, part.contribution);
+}
+
+function findStudyTotalColumn(sheet) {
+  for (let column = 4; column <= sheet.columnCount; column += 1) {
+    const header = normalizeText(sheet.getCell(3, column).value).trim();
+    if (/总分|总平均分|总均分|总成绩/.test(header)) return column;
+  }
+  return sheet.columnCount - 1;
+}
+
+function parseCourseHeader(value) {
+  const header = normalizeText(value).replace(/\n/g, " ").trim();
+  let name = "";
+  let credit = null;
+  const colonMatch = header.match(/学分\s*[:：]\s*([0-9]+(?:\.[0-9]+)?)/);
+  if (colonMatch) {
+    name = header.slice(0, colonMatch.index).trim();
+    credit = Number(colonMatch[1]);
+    return { name, credit };
+  }
+  const parenMatch = header.match(/学分\s*[（(]\s*([0-9]+(?:\.[0-9]+)?)\s*[）)]/);
+  if (parenMatch) {
+    name = header.slice(0, parenMatch.index).trim();
+    credit = Number(parenMatch[1]);
+    return { name, credit };
+  }
+  const generic = header.match(/^课程\d+/);
+  if (generic) {
+    name = generic[0];
+    return { name, credit };
+  }
+  if (header) {
+    name = header;
+    return { name, credit };
+  }
+  return null;
+}
+
+function writeStudy(sheet, row, state, message, part) {
+  writeIdentity(sheet, row, message);
+  const startColumn = 4;
+  const baseTotalColumn = findStudyTotalColumn(sheet);
+  const courses = Array.isArray(state.items)
+    ? state.items.filter((course) => course && (course.name || Number.isFinite(course.credit) || Number.isFinite(course.score)))
+    : [];
+  let totalColumn = baseTotalColumn;
+  const capacity = Math.max(0, baseTotalColumn - startColumn);
+  if (courses.length > capacity) {
+    const extra = courses.length - capacity;
+    sheet.spliceColumns(baseTotalColumn, 0, ...Array.from({ length: extra }, () => []));
+    const srcCol = Math.max(startColumn, baseTotalColumn - 1);
+    for (let i = 0; i < extra; i += 1) {
+      const dstCol = baseTotalColumn + i;
+      if (sheet.getColumn(srcCol).width !== undefined) {
+        sheet.getColumn(dstCol).width = sheet.getColumn(srcCol).width;
+      }
+      for (let r = 3; r <= sheet.rowCount; r += 1) {
+        sheet.getCell(r, dstCol).style = JSON.parse(JSON.stringify(sheet.getCell(r, srcCol).style || {}));
+      }
+    }
+    totalColumn = baseTotalColumn + extra;
+  } else if (courses.length < capacity) {
+    const removeCount = capacity - courses.length;
+    const mergeVals = [];
+    if (sheet._merges) {
+      Object.keys(sheet._merges).forEach((k) => {
+        const m = sheet._merges[k];
+        mergeVals.push({ key: k, value: sheet.getCell(m.top, m.left).value });
+      });
+    }
+    sheet.spliceColumns(startColumn + courses.length, removeCount);
+    mergeVals.forEach((mv) => {
+      const m = sheet._merges[mv.key];
+      if (m) sheet.getCell(m.top, m.left).value = mv.value;
+    });
+    totalColumn = startColumn + courses.length;
+    const targetCols = totalColumn + 1;
+    sheet.eachRow((row) => {
+      if (row._cells && row._cells.length > targetCols) {
+        row._cells.length = targetCols;
+      }
+    });
+  }
+  courses.forEach((course, index) => {
+    const column = startColumn + index;
+    sheet.getCell(3, column).value = `${course.name || "课程"} 学分：${course.credit == null ? "" : course.credit}`;
+    setNumber(sheet.getCell(row, column), Number.isFinite(course.score) ? course.score : null);
+  });
+  for (let column = startColumn + courses.length; column < totalColumn; column += 1) {
+    sheet.getCell(row, column).value = null;
+  }
+  setNumber(sheet.getCell(row, totalColumn), part.total);
+  setFormula(sheet.getCell(row, totalColumn + 1), `ROUND(${columnName(totalColumn)}${row}*${part.weight},2)`, part.contribution);
+  return {
+    totalCell: `${columnName(totalColumn)}${row}`,
+    contributionCell: `${columnName(totalColumn + 1)}${row}`,
+  };
+}
+
+function parseStudy(sheet, row) {
+  const totalColumn = findStudyTotalColumn(sheet);
+  const items = [];
+  for (let column = 4; column < totalColumn; column += 1) {
+    const course = parseCourseHeader(sheet.getCell(3, column).value);
+    if (!course) continue;
+    items.push({
+      name: course.name,
+      credit: course.credit,
+      score: asNumber(sheet.getCell(row, column).value),
+    });
+  }
+  return items.length ? items : [{ name: "", credit: null, score: null }];
+}
+
+function parseMessage(summary, row) {
+  const title = normalizeText(summary.getCell(1, 1).value).trim();
+  const yearMatch = title.match(/(\d{4}-\d{4})学年/);
+  const placeholderMatch = title.match(/lastyear-thisyear/);
+  const schoolYear = yearMatch ? yearMatch[1] : (placeholderMatch ? "" : "");
+  const collegeName = title
+    .replace(/\d{4}-\d{4}学年.*$/, "")
+    .replace(/lastyear-thisyear学年.*$/, "")
+    .replace(/^college/, "")
+    .trim();
+  return {
+    collegeName,
+    major: asText(summary.getCell(row, 2).value),
+    gradeAndClass: asText(summary.getCell(row, 3).value),
+    IdNum: asText(summary.getCell(row, 4).value),
+    name: asText(summary.getCell(row, 5).value),
+    schoolYear,
+    politicStatus: "",
+  };
+}
+
+function parseWorkbook(workbook) {
+  validateSheets(workbook);
+  const summary = sheetOrThrow(workbook, SHEETS.summary);
+  const summaryRow = findRow(summary, 4, "", 5, 5);
+  const message = parseMessage(summary, summaryRow);
+  const moralSheet = sheetOrThrow(workbook, SHEETS.moral);
+  const moralRow = findRow(moralSheet, 2, message.IdNum, 3, findDataStartRow(moralSheet, 3));
+  const abilitySheet = sheetOrThrow(workbook, SHEETS.ability);
+  const abilityRow = findRow(abilitySheet, 2, message.IdNum, 3, findDataStartRow(abilitySheet, 3));
+  const sportSheet = sheetOrThrow(workbook, SHEETS.sport);
+  const sportRow = findRow(sportSheet, 2, message.IdNum, 3, findDataStartRow(sportSheet, 3));
+  const artSheet = sheetOrThrow(workbook, SHEETS.art);
+  const artRow = findRow(artSheet, 2, message.IdNum, 3, findDataStartRow(artSheet, 3));
+  const workSheet = sheetOrThrow(workbook, SHEETS.work);
+  const workRow = findRow(workSheet, 2, message.IdNum, 3, findDataStartRow(workSheet, 3));
+  const studySheet = sheetOrThrow(workbook, SHEETS.study);
+  const studyRow = findRow(studySheet, 2, message.IdNum, 3, findDataStartRow(studySheet, 3));
+  return {
+    message,
+    moral: {
+      base: asNumber(moralSheet.getCell(moralRow, 4).value),
+      adds: parseItemsCell(moralSheet.getCell(moralRow, 5).value),
+      minus: parseItemsCell(moralSheet.getCell(moralRow, 7).value),
+    },
+    study: { items: parseStudy(studySheet, studyRow) },
+    ability: (() => {
+      const headerRow = findHeaderRow(abilitySheet, 3);
+      const colBase = findColByText(abilitySheet, headerRow, ["基础分"]);
+      const colAdds = findColByText(abilitySheet, headerRow, ["加分项", "加分项目"]);
+      return {
+        base: colBase ? asNumber(abilitySheet.getCell(abilityRow, colBase).value) : null,
+        adds: colAdds ? parseItemsCell(abilitySheet.getCell(abilityRow, colAdds).value) : [],
+        minus: [],
+      };
+    })(),
+    sport: {
+      mode: "withClass",
+      base: asNumber(sportSheet.getCell(sportRow, 4).value),
+      fitnessScore: null,
+      classScoreA: null,
+      classScoreB: null,
+      exerciseScore: null,
+      adds: parseItemsCell(sportSheet.getCell(sportRow, 5).value),
+      minus: parseItemsCell(sportSheet.getCell(sportRow, 7).value),
+    },
+    art: {
+      base: asNumber(artSheet.getCell(artRow, 4).value),
+      adds: parseItemsCell(artSheet.getCell(artRow, 5).value),
+      minus: parseItemsCell(artSheet.getCell(artRow, 7).value),
+    },
+    work: {
+      base: 0,
+      adds: parseItemsCell(workSheet.getCell(workRow, 4).value),
+      minus: parseItemsCell(workSheet.getCell(workRow, 6).value),
+    },
+  };
+}
+
+function scoreData(dataObj) {
+  const rules = dataObj.setting && dataObj.setting.rules ? dataObj.setting.rules : makeDefaultRules();
+  const parts = {
+    moral: scoreMoral(dataObj.moral || {}, rules),
+    study: scoreStudy(dataObj.study || {}, rules),
+    ability: scoreAbility(dataObj.ability || {}, rules),
+    sport: scoreSport(dataObj.sport || {}, rules),
+    art: scoreArt(dataObj.art || {}, rules),
+    work: scoreWork(dataObj.work || {}, rules),
+  };
+  return { rules, parts, total: scoreTotal(parts, rules) };
+}
+
+async function spawnResultTableFromDataObj(dataObj, filePath, modalPath) {
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.readFile(modalPath);
-  const sheet = workbook.getWorksheet(1);
-  const title = sheet.getCell(1, 1);
-  title.value = `${
-    message.collegeName ? message.collegeName : "未填写"
-  }学生个人学年综合素质测评评分表`;
-  const messageSheet = sheet.getCell(3, 1);
-  messageSheet.value = `专业班级：${message.gradeAndClass} 学号：${message.IdNum} 姓名：${message.name} 政治面貌：${message.politicStatus} 学生本人确认签名：    `;
-  const moralAdd = new Array(9).fill(0).map((v) => new Array(2).fill(0));
-  moralAdd[0][0] = sheet.getCell(7, 2);
-  moralAdd[1][0] = sheet.getCell(8, 2);
-  moralAdd[2][0] = sheet.getCell(9, 2);
-  moralAdd[3][0] = sheet.getCell(7, 5);
-  moralAdd[4][0] = sheet.getCell(8, 5);
-  moralAdd[5][0] = sheet.getCell(9, 5);
-  moralAdd[6][0] = sheet.getCell(7, 8);
-  moralAdd[7][0] = sheet.getCell(8, 8);
-  moralAdd[8][0] = sheet.getCell(9, 8);
-  moralAdd[0][1] = sheet.getCell(7, 3);
-  moralAdd[1][1] = sheet.getCell(8, 3);
-  moralAdd[2][1] = sheet.getCell(9, 3);
-  moralAdd[3][1] = sheet.getCell(7, 6);
-  moralAdd[4][1] = sheet.getCell(8, 6);
-  moralAdd[5][1] = sheet.getCell(9, 6);
-  moralAdd[6][1] = sheet.getCell(7, 9);
-  moralAdd[7][1] = sheet.getCell(8, 9);
-  moralAdd[8][1] = sheet.getCell(9, 9);
-  for (let i = 0; i < moralAdd.length; i++) {
-    const [reason, point] = moralAdd[i];
-    const [name, inputReason, inputPoint] = moral.addItem[i];
-    reason.value = inputReason;
-    point.value = inputPoint;
+  validateSheets(workbook);
+  const message = dataObj.message || {};
+  const { parts, total } = scoreData(dataObj);
+  const summary = sheetOrThrow(workbook, SHEETS.summary);
+  const summaryTitle = normalizeText(summary.getCell(1, 1).value).trim();
+  const yearPart = message.schoolYear
+    ? `${message.schoolYear}学年`
+    : ((summaryTitle.match(/(\d{4}-\d{4})学年/) || [""])[0] || "lastyear-thisyear学年");
+  if (message.collegeName) {
+    summary.getCell(1, 1).value = `${message.collegeName}${yearPart}学生个人综合测评成绩汇总表`;
   }
-  const moralMinus = new Array(6).fill(0).map((v) => new Array(2).fill(0));
-  moralMinus[0][0] = sheet.getCell(11, 2);
-  moralMinus[1][0] = sheet.getCell(12, 2);
-  moralMinus[2][0] = sheet.getCell(11, 5);
-  moralMinus[3][0] = sheet.getCell(12, 5);
-  moralMinus[4][0] = sheet.getCell(11, 8);
-  moralMinus[5][0] = sheet.getCell(12, 8);
-  moralMinus[0][1] = sheet.getCell(11, 3);
-  moralMinus[1][1] = sheet.getCell(12, 3);
-  moralMinus[2][1] = sheet.getCell(11, 6);
-  moralMinus[3][1] = sheet.getCell(12, 6);
-  moralMinus[4][1] = sheet.getCell(11, 9);
-  moralMinus[5][1] = sheet.getCell(12, 9);
-  for (let i = 0; i < moralMinus.length; i++) {
-    const [reason, point] = moralMinus[i];
-    const [name, inputReason, inputPoint] = moral.minusItem[i];
-    reason.value = inputReason;
-    point.value = inputPoint;
+  const moral = sheetOrThrow(workbook, SHEETS.moral);
+  const study = sheetOrThrow(workbook, SHEETS.study);
+  const ability = sheetOrThrow(workbook, SHEETS.ability);
+  const sport = sheetOrThrow(workbook, SHEETS.sport);
+  const art = sheetOrThrow(workbook, SHEETS.art);
+  const work = sheetOrThrow(workbook, SHEETS.work);
+  const summaryRow = findRow(summary, 4, message.IdNum, 5, 5);
+  const moralRow = findRow(moral, 2, message.IdNum, 3, findDataStartRow(moral, 3));
+  const studyRow = findRow(study, 2, message.IdNum, 3, findDataStartRow(study, 3));
+  const abilityRow = findRow(ability, 2, message.IdNum, 3, findDataStartRow(ability, 3));
+  const sportRow = findRow(sport, 2, message.IdNum, 3, findDataStartRow(sport, 3));
+  const artRow = findRow(art, 2, message.IdNum, 3, findDataStartRow(art, 3));
+  const workRow = findRow(work, 2, message.IdNum, 3, findDataStartRow(work, 3));
+  summary.getCell(summaryRow, 1).value = 1;
+  summary.getCell(summaryRow, 2).value = message.major || "未填写";
+  summary.getCell(summaryRow, 3).value = message.gradeAndClass || "";
+  summary.getCell(summaryRow, 4).value = message.IdNum || "";
+  summary.getCell(summaryRow, 5).value = message.name || "";
+  setFormula(summary.getCell(summaryRow, 6), `ROUND('${SHEETS.moral}'!J${moralRow},2)`, parts.moral.contribution);
+  const studyInfo = writeStudy(study, studyRow, dataObj.study || {}, message, parts.study);
+  setFormula(summary.getCell(summaryRow, 7), `ROUND('${SHEETS.study}'!${studyInfo.contributionCell}+'${SHEETS.ability}'!H${abilityRow},2)`, (parts.study.contribution || 0) + (parts.ability.contribution || 0));
+  setFormula(summary.getCell(summaryRow, 8), `ROUND('${SHEETS.sport}'!J${sportRow},2)`, parts.sport.contribution);
+  setFormula(summary.getCell(summaryRow, 9), `ROUND('${SHEETS.art}'!J${artRow},2)`, parts.art.contribution);
+  setFormula(summary.getCell(summaryRow, 10), `ROUND('${SHEETS.work}'!I${workRow},2)`, parts.work.contribution);
+  setFormula(summary.getCell(summaryRow, 11), `ROUND(SUM(F${summaryRow}:J${summaryRow}),2)`, total.total);
+  for (let col = 6; col <= 11; col += 1) {
+    applySummaryStyle(summary.getCell(summaryRow, col));
   }
-  const moralShowMSG = sheet.getCell(13, 1);
-  moralShowMSG.value = `德育加减分总计=（ ${moral.sum} ）                德育总分=基础分70+加减分总计（ ${moral.sum} ） =（ ${moral.total} ）`;
-  const sportAdd = new Array(2).fill(0).map((v) => new Array(2).fill(0));
-  sportAdd[0][0] = sheet.getCell(17, 2);
-  sportAdd[1][0] = sheet.getCell(17, 5);
-  sportAdd[0][1] = sheet.getCell(17, 3);
-  sportAdd[1][1] = sheet.getCell(17, 6);
-  for (let i = 0; i < sportAdd.length; i++) {
-    const [reason, point] = sportAdd[i];
-    const [name, inputReason, inputPoint] = sport.addItem[i];
-    reason.value = inputReason;
-    point.value = inputPoint;
-  }
-  const sportMinus = new Array(3).fill(0).map((v) => new Array(2).fill(0));
-  sportMinus[0][0] = sheet.getCell(17, 8);
-  sportMinus[1][0] = sheet.getCell(18, 8);
-  sportMinus[2][0] = sheet.getCell(19, 8);
-  sportMinus[0][1] = sheet.getCell(17, 9);
-  sportMinus[1][1] = sheet.getCell(18, 9);
-  sportMinus[2][1] = sheet.getCell(19, 9);
-  for (let i = 0; i < sportMinus.length; i++) {
-    const [reason, point] = sportMinus[i];
-    const [name, inputReason, inputPoint] = sport.minusItem[i];
-    reason.value = inputReason;
-    point.value = inputPoint;
-  }
-  const sportShowMSG = sheet.getCell(20, 1);
-  sportShowMSG.value = `体育加减分总计=(${fixed2(
-    sport.sum
-  )}）     体育总分=基础分（ ${fixed2(sport.base)} ） +加减分总计（ ${fixed2(
-    sport.sum
-  )} ） =（ ${fixed2(sport.total)} ）`;
-  const sportShowTotalMSG = sheet.getCell(21, 1);
-  sportShowTotalMSG.value = `体育基础分=(学生体质健康测试 ${fixed2(
-    sport.baseItem[0][1]
-  )} *60% + 专业考试成绩 ${fixed2(
-    sport.baseItem[1][1]
-  )} *40%)*70% + 课外锻炼分 ${fixed2(sport.baseItem[2][1])} *30%= ${fixed2(
-    sport.base
-  )}`;
-  const studyShowMSG = sheet.getCell(26, 1);
-  studyShowMSG.value = `智育总分=（${fixed2(study.sum)}）`;
-  const inputAbilityAdd = [...ability.partOne, ...ability.partTwo];
-  const abilityAdd = new Array(10);
-  // 技能证书
-  abilityAdd[0] = new Array(5).fill(0);
-  abilityAdd[0] = abilityAdd[0].map((v, i) => {
-    return [sheet.getCell(i + 29, 2), sheet.getCell(i + 29, 3)];
-  });
-  // 社会实践
-  abilityAdd[1] = new Array(5).fill(0);
-  abilityAdd[1] = abilityAdd[1].map((v, i) => {
-    return [sheet.getCell(i + 29, 5), sheet.getCell(i + 29, 6)];
-  });
-  // 表彰奖励
-  abilityAdd[2] = new Array(5).fill(0);
-  abilityAdd[2] = abilityAdd[2].map((v, i) => {
-    return [sheet.getCell(i + 29, 8), sheet.getCell(i + 29, 9)];
-  });
-  // 学科竞赛科技活动
-  abilityAdd[3] = new Array(11).fill(0);
-  abilityAdd[3] = abilityAdd[3].map((v, i) => {
-    return [sheet.getCell(i + 34, 2), sheet.getCell(i + 34, 3)];
-  });
-  // 文体竞赛
-  abilityAdd[4] = new Array(6).fill(0);
-  abilityAdd[4] = abilityAdd[4].map((v, i) => {
-    return [sheet.getCell(i + 34, 5), sheet.getCell(i + 34, 6)];
-  });
-  // 学干任职
-  abilityAdd[5] = new Array(4).fill(0);
-  abilityAdd[5] = abilityAdd[5].map((v, i) => {
-    return [sheet.getCell(i + 34, 8), sheet.getCell(i + 34, 9)];
-  });
-  // 科研论文
-  abilityAdd[6] = new Array(2).fill(0);
-  abilityAdd[6] = abilityAdd[6].map((v, i) => {
-    return [sheet.getCell(i + 38, 8), sheet.getCell(i + 38, 9)];
-  });
-  // 文章、征文、消息、简讯发表在校级刊物
-  abilityAdd[7] = new Array(5).fill(0);
-  abilityAdd[7] = abilityAdd[7].map((v, i) => {
-    return [sheet.getCell(i + 40, 5), sheet.getCell(i + 40, 6)];
-  });
-  // 各类文化活动
-  abilityAdd[8] = new Array(4).fill(0);
-  abilityAdd[8] = abilityAdd[8].map((v, i) => {
-    return [sheet.getCell(i + 40, 8), sheet.getCell(i + 40, 9)];
-  });
-  // 其他情况
-  abilityAdd[9] = new Array(1).fill(0);
-  abilityAdd[9] = abilityAdd[9].map((v, i) => {
-    return [sheet.getCell(i + 44, 8), sheet.getCell(i + 44, 9)];
-  });
-  for (let i = 0; i < abilityAdd.length; i++) {
-    inputAbilityAdd[i][1].forEach((arr, arri) => {
-      const [inputReason, inputPoint, inputId] = arr;
-      const [reason, point] = abilityAdd[i][arri];
-      reason.value = inputReason;
-      point.value = inputPoint;
-    });
-  }
-  const inputAbilityMinus = [...ability.partThree];
-  const abilityMinus = new Array(1);
-  // 听取讲座
-  abilityMinus[0] = new Array(1).fill(0);
-  abilityMinus[0] = abilityMinus[0].map((v, i) => {
-    return [sheet.getCell(i + 46, 2), sheet.getCell(i + 46, 3)];
-  });
-  for (let i = 0; i < abilityMinus.length; i++) {
-    inputAbilityMinus[i][1].forEach((arr, arri) => {
-      const [inputReason, inputPoint, inputId] = arr;
-      const [reason, point] = abilityAdd[i][arri];
-      reason.value = inputReason;
-      point.value = inputPoint;
-    });
-  }
-  const abilityShowMSG = sheet.getCell(47, 1);
-  abilityShowMSG.value = `能力加减分总计=  （ ${
-    ability.sum
-  } ）         能力总分=基础分20+能力加减分总计（ ${ability.sum} ） =（ ${
-    +ability.sum + 20
-  } ）`;
-  const result =
-    moral.total * (setting.moral / 100) +
-    study.sum * (setting.study / 100) +
-    sport.total * (setting.sport / 100) +
-    (+ability.sum + 20) * (setting.ability / 100);
-
-  const totalShowMSG = sheet.getCell(48, 1);
-  totalShowMSG.value = `综测总分=德育总分（${moral.total}）*${
-    setting.moral
-  }%+智育总分（${fixed2(study.sum)}）*${setting.study}%+体育总分（${fixed2(
-    sport.total
-  )}）*${setting.sport}%+能力总分（${+ability.sum + 20}）*${
-    setting.ability
-  }%=${fixed3(result)}`;
+  writeDimensionRows(moral, moralRow, dataObj.moral || {}, message, parts.moral, 5, 7, 9, 10, 4);
+  writeDimensionRows(sport, sportRow, dataObj.sport || {}, message, parts.sport, 5, 7, 9, 10, 4);
+  writeDimensionRows(art, artRow, dataObj.art || {}, message, parts.art, 5, 7, 9, 10, 4);
+  writeDimensionRows(work, workRow, dataObj.work || {}, message, parts.work, 4, 6, 8, 9, null);
+  writeIdentity(ability, abilityRow, message);
+  setNumber(ability.getCell(abilityRow, 4), parts.ability.base);
+  ability.getCell(abilityRow, 5).value = serializeItemsCell((dataObj.ability || {}).adds, "adds");
+  setNumber(ability.getCell(abilityRow, 6), parts.ability.addsTotal == null ? 0 : parts.ability.addsTotal);
+  setFormula(ability.getCell(abilityRow, 7), `ROUND(D${abilityRow}+F${abilityRow},2)`, parts.ability.total);
+  setFormula(ability.getCell(abilityRow, 8), `ROUND(G${abilityRow}*${parts.ability.weight},2)`, parts.ability.contribution);
+  workbook.calcProperties.fullCalcOnLoad = true;
+  workbook.calcProperties.forceFullCalc = true;
   await workbook.xlsx.writeFile(filePath);
+  return filePath;
 }
 
-export async function parseTableToDataObj(filePath) {
+async function parseTableToDataObj(filePath) {
   try {
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.readFile(filePath);
-    const sheet = workbook.getWorksheet(1);
-
-    const message = {};
-
-    const title = sheet.getCell(1, 1);
-    try {
-      message.collegeName = handleText(title.value).match(
-        /(.+)学生个人学年综合素质测评评分表/
-      )[1];
-    } catch (error) {
-      message.collegeName = "学生个人学年综合素质测评评分表";
-    }
-    const messageSheet = sheet.getCell(3, 1);
-    const parseMessage = handleText(messageSheet.value).match(
-      /专业班级：(.*)学号：(.*)姓名：(.*)政治面貌：(.*)学生本人确认签名：.*/
-    );
-    message.gradeAndClass = parseMessage[1].trim();
-    message.IdNum = parseMessage[2].trim();
-    message.name = parseMessage[3].trim();
-    message.politicStatus = parseMessage[4].trim();
-
-    const moral = {
-      addItem: [
-        ["党员、预备党员", null, null],
-        ["入党积极分子", null, null],
-        ["学生手册成绩", null, null],
-        ["好人好事奖励", null, null],
-        ["公益活动", null, null],
-        ["其他情况", null, null],
-        ["宿舍表现", null, null],
-        ["思想政治理论课", null, null],
-        ["三早一晚出勤率", null, null],
-      ],
-      minusItem: [
-        ["违规违纪处分", null, null],
-        ["思想政治理论课", null, null],
-        ["恶意拖欠学费", null, null],
-        ["学期宿舍评比", null, null],
-        ["三早一晚缺勤", null, null],
-        ["公益活动", null, null],
-      ],
-      sum: 0,
-      total: 70,
-    };
-
-    let addMoralSum = 0;
-    const moralAdd = new Array(9).fill(0).map((v) => new Array(2).fill(0));
-    moralAdd[0][0] = sheet.getCell(7, 2);
-    moralAdd[1][0] = sheet.getCell(8, 2);
-    moralAdd[2][0] = sheet.getCell(9, 2);
-    moralAdd[3][0] = sheet.getCell(7, 5);
-    moralAdd[4][0] = sheet.getCell(8, 5);
-    moralAdd[5][0] = sheet.getCell(9, 5);
-    moralAdd[6][0] = sheet.getCell(7, 8);
-    moralAdd[7][0] = sheet.getCell(8, 8);
-    moralAdd[8][0] = sheet.getCell(9, 8);
-    moralAdd[0][1] = sheet.getCell(7, 3);
-    moralAdd[1][1] = sheet.getCell(8, 3);
-    moralAdd[2][1] = sheet.getCell(9, 3);
-    moralAdd[3][1] = sheet.getCell(7, 6);
-    moralAdd[4][1] = sheet.getCell(8, 6);
-    moralAdd[5][1] = sheet.getCell(9, 6);
-    moralAdd[6][1] = sheet.getCell(7, 9);
-    moralAdd[7][1] = sheet.getCell(8, 9);
-    moralAdd[8][1] = sheet.getCell(9, 9);
-    for (let i = 0; i < moralAdd.length; i++) {
-      const [reason, point] = moralAdd[i];
-      const [name, inputReason, inputPoint] = moral.addItem[i];
-      moral.addItem[i] = [name, reason.value, point.value && +point.value];
-      if (!isNaN(+point.value)) {
-        addMoralSum += +point.value;
-      }
-    }
-
-    let minusMoralSum = 0;
-    const moralMinus = new Array(6).fill(0).map((v) => new Array(2).fill(0));
-    moralMinus[0][0] = sheet.getCell(11, 2);
-    moralMinus[1][0] = sheet.getCell(12, 2);
-    moralMinus[2][0] = sheet.getCell(11, 5);
-    moralMinus[3][0] = sheet.getCell(12, 5);
-    moralMinus[4][0] = sheet.getCell(11, 8);
-    moralMinus[5][0] = sheet.getCell(12, 8);
-    moralMinus[0][1] = sheet.getCell(11, 3);
-    moralMinus[1][1] = sheet.getCell(12, 3);
-    moralMinus[2][1] = sheet.getCell(11, 6);
-    moralMinus[3][1] = sheet.getCell(12, 6);
-    moralMinus[4][1] = sheet.getCell(11, 9);
-    moralMinus[5][1] = sheet.getCell(12, 9);
-    for (let i = 0; i < moralMinus.length; i++) {
-      const [reason, point] = moralMinus[i];
-      const [name, inputReason, inputPoint] = moral.minusItem[i];
-      moral.minusItem[i] = [name, reason.value, point.value && +point.value];
-      if (!isNaN(+point.value)) {
-        minusMoralSum += Math.abs(+point.value);
-      }
-    }
-
-    moral.sum = addMoralSum - minusMoralSum;
-    moral.total += moral.sum;
-
-    const sport = {
-      baseItem: [
-        ["学生体质健康测试（体测成绩）", null],
-        ["专业考试成绩（体育课考试成绩）", null],
-        ["课外锻炼分", null],
-      ],
-      addItem: [
-        ["体测成绩优秀", null, null],
-        ["课外锻炼出勤率", null, null],
-      ],
-      minusItem: [
-        ["体测成绩不及格", null, null],
-        ["体育课成绩不合格", null, null],
-        ["课外锻炼出勤率", null, null],
-      ],
-      sum: null,
-      total: null,
-      base: null,
-    };
-
-    const sportAdd = new Array(2).fill(0).map((v) => new Array(2).fill(0));
-    sportAdd[0][0] = sheet.getCell(17, 2);
-    sportAdd[1][0] = sheet.getCell(17, 5);
-    sportAdd[0][1] = sheet.getCell(17, 3);
-    sportAdd[1][1] = sheet.getCell(17, 6);
-
-    for (let i = 0; i < sportAdd.length; i++) {
-      const [reason, point] = sportAdd[i];
-      sport.addItem[i] = [
-        sport.addItem[i][0],
-        reason.value,
-        point.value && +point.value,
-      ];
-    }
-    const sportMinus = new Array(3).fill(0).map((v) => new Array(2).fill(0));
-    sportMinus[0][0] = sheet.getCell(17, 8);
-    sportMinus[1][0] = sheet.getCell(18, 8);
-    sportMinus[2][0] = sheet.getCell(19, 8);
-    sportMinus[0][1] = sheet.getCell(17, 9);
-    sportMinus[1][1] = sheet.getCell(18, 9);
-    sportMinus[2][1] = sheet.getCell(19, 9);
-    for (let i = 0; i < sportMinus.length; i++) {
-      const [reason, point] = sportMinus[i];
-      sport.minusItem[i] = [
-        sport.minusItem[i][0],
-        reason.value,
-        point.value && +point.value,
-      ];
-    }
-
-    const sportShowBaseMSG = sheet.getCell(21, 1);
-    const parseSportShowBaseMSG = handleText(sportShowBaseMSG.value).match(
-      /体育基础分=\(学生体质健康测试\s*(.*)\*60%.+专业考试成绩(.*)\*40%.+课外锻炼分(.*)\*30%.*/
-    );
-    sport.baseItem[0][1] = +parseSportShowBaseMSG[1].trim();
-    sport.baseItem[1][1] = +parseSportShowBaseMSG[2].trim();
-    sport.baseItem[2][1] = +parseSportShowBaseMSG[3].trim();
-
-    const study = {
-      item: [[null, null, null, "id"]],
-      sum: 0,
-    };
-    const studyShowMSG = sheet.getCell(26, 1);
-    const parseStudyShowMSG = handleText(studyShowMSG.value).match(
-      /智育总分\s*=\s*（(.*)）/
-    );
-    study.item[0] = ["总成绩", +parseStudyShowMSG[1].trim(), 1, "id"];
-    study.sum = +parseStudyShowMSG[1].trim();
-
-    const ability = {
-      partOne: [],
-      partTwo: [],
-      partThree: [["听取讲座", [], 1]],
-      sum: 0,
-    };
-    const abilityAddModel = [
-      ["技能证书", [], 5],
-      ["社会实践", [], 5],
-      ["表彰奖励", [], 5],
-      ["学科竞赛科技活动", [], 11],
-      ["文体竞赛", [], 6],
-      ["文章、征文、消息、简讯发表在校级刊物", [], 5],
-      ["学干任职", [], 4],
-      ["发表科研论文", [], 2],
-      ["各类文化活动", [], 4],
-      ["其他情况", [], 1],
-    ];
-    let abilityAddSum = 0;
-    const abilityAdd = new Array(10);
-    // 技能证书
-    abilityAdd[0] = new Array(5).fill(0);
-    abilityAdd[0] = abilityAdd[0].map((v, i) => {
-      return [sheet.getCell(i + 29, 2), sheet.getCell(i + 29, 3)];
-    });
-    // 社会实践
-    abilityAdd[1] = new Array(5).fill(0);
-    abilityAdd[1] = abilityAdd[1].map((v, i) => {
-      return [sheet.getCell(i + 29, 5), sheet.getCell(i + 29, 6)];
-    });
-    // 表彰奖励
-    abilityAdd[2] = new Array(5).fill(0);
-    abilityAdd[2] = abilityAdd[2].map((v, i) => {
-      return [sheet.getCell(i + 29, 8), sheet.getCell(i + 29, 9)];
-    });
-    // 学科竞赛科技活动
-    abilityAdd[3] = new Array(11).fill(0);
-    abilityAdd[3] = abilityAdd[3].map((v, i) => {
-      return [sheet.getCell(i + 34, 2), sheet.getCell(i + 34, 3)];
-    });
-    // 文体竞赛
-    abilityAdd[4] = new Array(6).fill(0);
-    abilityAdd[4] = abilityAdd[4].map((v, i) => {
-      return [sheet.getCell(i + 34, 5), sheet.getCell(i + 34, 6)];
-    });
-    // 学干任职
-    abilityAdd[5] = new Array(4).fill(0);
-    abilityAdd[5] = abilityAdd[5].map((v, i) => {
-      return [sheet.getCell(i + 34, 8), sheet.getCell(i + 34, 9)];
-    });
-    // 科研论文
-    abilityAdd[6] = new Array(2).fill(0);
-    abilityAdd[6] = abilityAdd[6].map((v, i) => {
-      return [sheet.getCell(i + 38, 8), sheet.getCell(i + 38, 9)];
-    });
-    // 文章、征文、消息、简讯发表在校级刊物
-    abilityAdd[7] = new Array(5).fill(0);
-    abilityAdd[7] = abilityAdd[7].map((v, i) => {
-      return [sheet.getCell(i + 40, 5), sheet.getCell(i + 40, 6)];
-    });
-    // 各类文化活动
-    abilityAdd[8] = new Array(4).fill(0);
-    abilityAdd[8] = abilityAdd[8].map((v, i) => {
-      return [sheet.getCell(i + 40, 8), sheet.getCell(i + 40, 9)];
-    });
-    // 其他情况
-    abilityAdd[9] = new Array(1).fill(0);
-    abilityAdd[9] = abilityAdd[9].map((v, i) => {
-      return [sheet.getCell(i + 44, 8), sheet.getCell(i + 44, 9)];
-    });
-    for (let i = 0; i < abilityAdd.length; i++) {
-      for (let j = 0; j < abilityAdd[i].length; j++) {
-        const [reason, point] = abilityAdd[i][j];
-        abilityAddModel[i][1].push([
-          reason.value,
-          point.value && +point.value,
-          `parseabilityaddid${i}${j}`,
-        ]);
-        if (!isNaN(+point.value)) {
-          abilityAddSum += Math.abs(+point.value);
-        }
-      }
-    }
-
-    const abilityMinus = new Array(1);
-    // 听取讲座
-    abilityMinus[0] = new Array(1).fill(0);
-    abilityMinus[0] = abilityMinus[0].map((v, i) => {
-      return [sheet.getCell(i + 46, 2), sheet.getCell(i + 46, 3)];
-    });
-    for (let i = 0; i < abilityMinus.length; i++) {
-      for (let j = 0; j < abilityMinus[i].length; j++) {
-        const [reason, point] = abilityMinus[i][j];
-        ability.partThree[i][1].push([
-          reason.value,
-          point.value && +point.value,
-          `parseabilityminusid${i}${j}`,
-        ]);
-        if (!isNaN(+point.value)) {
-          abilityAddSum -= Math.abs(+point.value);
-        }
-      }
-    }
-    ability.sum = abilityAddSum;
-    ability.partOne = abilityAddModel.slice(0, 3);
-    ability.partTwo = abilityAddModel.slice(3, 10);
-
-    return {
-      ability,
-      message,
-      moral,
-      sport,
-      study,
-    };
+    return parseWorkbook(workbook);
   } catch (error) {
-    console.log(error);
     return false;
   }
 }
 
+module.exports = {
+  parseItemsCell,
+  serializeItemsCell,
+  spawnResultTableFromDataObj,
+  parseTableToDataObj,
+};
