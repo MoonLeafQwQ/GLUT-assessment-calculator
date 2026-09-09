@@ -1,6 +1,6 @@
+//study dimension state for new template (weighted course average).
 export const totalState = {
-  item: [[null, null, null, "id"]],
-  sum: 0,
+  items: [{ name: "", credit: null, score: null }],
 };
 
 const initialState = totalState;
@@ -13,97 +13,41 @@ export const actionsType = {
 };
 
 export const actions = {
-  change_item(id, innerIndex, value) {
-    return {
-      type: actionsType.CHANGE_STUDY_ITEM,
-      id,
-      innerIndex,
-      value,
-    };
+  change_item(index, field, value) {
+    return { type: actionsType.CHANGE_STUDY_ITEM, index, field, value };
   },
   add_item() {
-    return {
-      type: actionsType.ADD_STUDY_ITEM,
-    };
+    return { type: actionsType.ADD_STUDY_ITEM };
   },
-  delete_item(id) {
-    return {
-      type: actionsType.DELETE_STUDY_ITEM,
-      id,
-    };
+  delete_item(index) {
+    return { type: actionsType.DELETE_STUDY_ITEM, index };
   },
   rebuild_study_obj(obj) {
-    return {
-      type: actionsType.REBUILD_STUDY_OBJ,
-      obj,
-    };
+    return { type: actionsType.REBUILD_STUDY_OBJ, obj };
   },
 };
 
 export function reducer(state = initialState, action) {
   switch (action.type) {
     case actionsType.CHANGE_STUDY_ITEM: {
-      const { id, innerIndex, value } = action;
-      let sum = 0,
-        mul = 0;
-      let item = state.item.map((v) => {
-        if (v[3] === id) {
-          v[innerIndex] = value;
-        }
-        const [description, mark, point] = v;
-        sum += +point;
-        mul += +mark * +point;
-        return v;
-      });
-      sum = mul / sum;
-      sum = sum > 100 ? 100 : sum;
-      sum = sum < 0 ? 0 : sum;
-      return {
-        ...state,
-        item,
-        sum,
-      };
+      const items = state.items.map((row, i) =>
+        i === action.index ? Object.assign({}, row, { [action.field]: action.value }) : row
+      );
+      return Object.assign({}, state, { items });
     }
     case actionsType.ADD_STUDY_ITEM: {
-      let sum = 0,
-        mul = 0;
-      let item = [...state.item, [null, null, null, Date.now()]];
-      item.map((v) => {
-        const [description, mark, point] = v;
-        sum += +point;
-        mul += +mark * +point;
-        return v;
+      return Object.assign({}, state, {
+        items: state.items.concat([{ name: "", credit: null, score: null }]),
       });
-      sum = mul / sum;
-      sum = sum > 100 ? 100 : sum;
-      sum = sum < 0 ? 0 : sum;
-      return {
-        ...state,
-        item,
-        sum,
-      };
     }
     case actionsType.DELETE_STUDY_ITEM: {
-      let sum = 0,
-        mul = 0;
-      let item = state.item.filter((v) => v[3] !== action.id);
-      item.map((v) => {
-        const [description, mark, point] = v;
-        sum += +point;
-        mul += +mark * +point;
-        return v;
+      return Object.assign({}, state, {
+        items: state.items.filter((_, i) => i !== action.index),
       });
-      sum = mul / sum;
-      sum = sum > 100 ? 100 : sum;
-      sum = sum < 0 ? 0 : sum;
-      return {
-        ...state,
-        item,
-        sum,
-      };
     }
-    case actionsType.REBUILD_STUDY_OBJ:
-      return action.obj;
+    case actionsType.REBUILD_STUDY_OBJ: {
+      return Object.assign({}, state, action.obj || {});
+    }
     default:
       return state;
   }

@@ -1,9 +1,10 @@
 const initialState = {
   collegeName: "",
+  major: "",
   gradeAndClass: "",
   IdNum: "",
   name: "",
-  politicStatus: "",
+  schoolYear: "",
 };
 
 export const actionsType = {

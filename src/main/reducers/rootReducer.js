@@ -4,6 +4,8 @@ import { reducer as moral } from "./moral";
 import { reducer as sport } from "./sport";
 import { reducer as study } from "./study";
 import { reducer as ability } from "./ability";
+import { reducer as art } from "./art";
+import { reducer as work } from "./work";
 import { reducer as setting } from "./setting";
 
 export const allEditingValue = {
@@ -15,6 +17,8 @@ export const allEditingValue = {
   ABILITY_ONE: "ABILITY_ONE",
   ABILITY_TWO: "ABILITY_TWO",
   ABILITY_THREE: "ABILITY_THREE",
+  ART: "art",
+  WORK: "work",
   NONE: "NONE",
 };
 
@@ -55,5 +59,7 @@ export default combineReducers({
   sport: sport,
   study: study,
   ability: ability,
+  art: art,
+  work: work,
   setting: setting,
 });

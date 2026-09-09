@@ -1,5 +1,13 @@
 import { defaultSetting } from "../../source/constant";
-export const totalState = { ...defaultSetting };
+
+const TEMPLATE_VERSION = "v1";
+
+export const totalState = {
+  ...defaultSetting,
+  templateVersion: TEMPLATE_VERSION,
+  sportMode: "withClass",
+  rules: defaultSetting.rules,
+};
 
 const initialState = totalState;
 

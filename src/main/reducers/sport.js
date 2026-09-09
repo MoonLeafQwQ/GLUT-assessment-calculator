@@ -1,121 +1,89 @@
+// main/reducers/sport.js: sport dimension state for new template (withClass / withoutClass).
+
 export const totalState = {
-  baseItem: [
-    ["学生体质健康测试（体测成绩）", null],
-    ["专业考试成绩（体育课考试成绩）", null],
-    ["课外锻炼分", null],
-  ],
-  addItem: [
-    ["体测成绩优秀", null, null],
-    ["课外锻炼出勤率", null, null],
-  ],
-  minusItem: [
-    ["体测成绩不及格", null, null],
-    ["体育课成绩不合格", null, null],
-    ["课外锻炼出勤率", null, null],
-  ],
-  sum: null,
-  total: null,
+  mode: "withClass",
   base: null,
+  fitnessScore: null,
+  classScoreA: null,
+  classScoreB: null,
+  exerciseScore: null,
+  adds: [{ name: "体测成绩优秀", desc: "", points: null }],
+  minus: [{ name: "体测成绩不及格", desc: "", points: null }],
 };
 
 const initialState = totalState;
 
 export const actionsType = {
-  CHANGE_SPORT_ITEM: "CHANGE_SPORT_ITEM",
+  CHANGE_SPORT_MODE: "CHANGE_SPORT_MODE",
+  CHANGE_SPORT_BASE: "CHANGE_SPORT_BASE",
+  CHANGE_SPORT_ADD: "CHANGE_SPORT_ADD",
+  CHANGE_SPORT_MINUS: "CHANGE_SPORT_MINUS",
+  ADD_SPORT_ROW: "ADD_SPORT_ROW",
+  REMOVE_SPORT_ROW: "REMOVE_SPORT_ROW",
   REBUILD_SPORT_OBJ: "REBUILD_SPORT_OBJ",
 };
 
 export const actions = {
-  change_item(sign, index, innerIndex, value) {
-    return {
-      type: actionsType.CHANGE_SPORT_ITEM,
-      sign,
-      index,
-      innerIndex,
-      value,
-    };
+  change_mode(mode) {
+    return { type: actionsType.CHANGE_SPORT_MODE, mode };
+  },
+  change_base(field, value) {
+    return { type: actionsType.CHANGE_SPORT_BASE, field, value };
+  },
+  change_add(index, field, value) {
+    return { type: actionsType.CHANGE_SPORT_ADD, index, field, value };
+  },
+  change_minus(index, field, value) {
+    return { type: actionsType.CHANGE_SPORT_MINUS, index, field, value };
+  },
+  add_row(sign) {
+    return { type: actionsType.ADD_SPORT_ROW, sign };
+  },
+  remove_row(sign, index) {
+    return { type: actionsType.REMOVE_SPORT_ROW, sign, index };
   },
   rebuild_sport_obj(obj) {
-    return {
-      type: actionsType.REBUILD_SPORT_OBJ,
-      obj,
-    };
+    return { type: actionsType.REBUILD_SPORT_OBJ, obj };
   },
 };
 
-function cal(baseItem, addItem, minusItem) {
-  let sum = 0;
-  sum += addItem.reduce((pre, cur) => pre + +cur[2], 0);
-  sum -= minusItem.reduce((pre, cur) => pre + +cur[2], 0);
-
-  let base =
-    (baseItem[0][1] * 0.6 + baseItem[1][1] * 0.4) * 0.7 + baseItem[2][1] * 0.3;
-  let total = sum + base;
-  total = total > 100 ? 100 : total;
-  total = total < 0 ? 0 : total;
-  return {
-    sum,
-    base,
-    total,
-  };
+function updateRow(list, index, field, value) {
+  return list.map((row, i) => (i === index ? Object.assign({}, row, { [field]: value }) : row));
 }
 
 export function reducer(state = initialState, action) {
   switch (action.type) {
-    case actionsType.CHANGE_SPORT_ITEM:
-      const { sign, index, innerIndex, value } = action;
-      if (sign === 1) {
-        const addItem = state.addItem.map((v, i) => {
-            if (i === index) {
-              v[innerIndex] = value;
-            }
-            return v;
-          }),
-          minusItem = state.minusItem,
-          baseItem = state.baseItem;
-
-        return {
-          ...state,
-          addItem: addItem,
-          ...cal(baseItem, addItem, minusItem),
-        };
-      } else if (sign === 2) {
-        const addItem = state.addItem,
-          minusItem = state.minusItem.map((v, i) => {
-            if (i === index) {
-              v[innerIndex] = value;
-            }
-            return v;
-          }),
-          baseItem = state.baseItem;
-        return {
-          ...state,
-          minusItem: minusItem,
-          ...cal(baseItem, addItem, minusItem),
-        };
-      } else {
-        const addItem = state.addItem,
-          minusItem = state.minusItem,
-          baseItem = state.baseItem.map((v, i) => {
-            if (i === index) {
-              v[innerIndex] = value;
-            }
-            return v;
-          });
-        return {
-          ...state,
-          baseItem: baseItem,
-          ...cal(baseItem, addItem, minusItem),
-        };
-      }
-    case actionsType.REBUILD_SPORT_OBJ: {
-      const { baseItem, addItem, minusItem } = action.obj;
-      return {
-        ...action.obj,
-        ...cal(baseItem, addItem, minusItem),
-      };
+    case actionsType.CHANGE_SPORT_MODE: {
+      if (action.mode !== "withClass" && action.mode !== "withoutClass") return state;
+      return Object.assign({}, state, { mode: action.mode });
     }
-
+    case actionsType.CHANGE_SPORT_BASE: {
+      return Object.assign({}, state, { [action.field]: action.value });
+    }
+    case actionsType.CHANGE_SPORT_ADD: {
+      return Object.assign({}, state, { adds: updateRow(state.adds, action.index, action.field, action.value) });
+    }
+    case actionsType.CHANGE_SPORT_MINUS: {
+      return Object.assign({}, state, { minus: updateRow(state.minus, action.index, action.field, action.value) });
+    }
+    case actionsType.ADD_SPORT_ROW: {
+      const row = { name: "", desc: "", points: null };
+      if (action.sign === "adds") return Object.assign({}, state, { adds: state.adds.concat(row) });
+      if (action.sign === "minus") return Object.assign({}, state, { minus: state.minus.concat(row) });
+      return state;
+    }
+    case actionsType.REMOVE_SPORT_ROW: {
+      if (action.sign === "adds") {
+        return Object.assign({}, state, { adds: state.adds.filter((_, i) => i !== action.index) });
+      }
+      if (action.sign === "minus") {
+        return Object.assign({}, state, { minus: state.minus.filter((_, i) => i !== action.index) });
+      }
+      return state;
+    }
+    case actionsType.REBUILD_SPORT_OBJ: {
+      return Object.assign({}, state, action.obj || {});
+    }
     default:
       return state;
   }
