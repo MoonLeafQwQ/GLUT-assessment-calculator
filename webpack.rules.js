@@ -28,6 +28,10 @@ module.exports = [
         exclude: /(node_modules|bower_components)/,
         loader: "babel-loader",
         options: {
+          // 按源码实际语法判定模块类型：纯 CommonJS 文件（domain 层）
+          // 注入的 core-js polyfill 会使用 require 而非 import，避免
+          // "ES Modules may not assign module.exports" 白屏错误
+          sourceType: "unambiguous",
           presets: [
             [
               "@babel/preset-env",
